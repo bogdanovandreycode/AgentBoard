@@ -1,4 +1,3 @@
-```powershell
 $ErrorActionPreference = "Stop"
 
 # ============================================================
@@ -632,4 +631,3 @@ Write-Host ""
 Write-Host "Do NOT run go mod tidy manually yet."
 Write-Host "Codex should run it after the Go dependencies are actually imported."
 Write-Host ""
-```
