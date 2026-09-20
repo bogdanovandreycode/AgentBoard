@@ -371,6 +371,22 @@ func (s *Service) HumanBoard(ctx context.Context, projectID string) (core.Board,
 	return b, nil
 }
 
+func (s *Service) HumanCreateTask(ctx context.Context, projectID string, in core.TaskInput) (core.Task, error) {
+	if in.Assignee.Type == "" {
+		in.Assignee.Type = "unassigned"
+	}
+	if err := s.validateAssignee(ctx, projectID, in.Assignee, false); err != nil {
+		return core.Task{}, err
+	}
+	for _, dependencyID := range in.DependencyIDs {
+		dependency, err := s.Store.GetTask(ctx, dependencyID)
+		if err != nil || dependency.ProjectID != projectID {
+			return core.Task{}, core.ErrInvalidInput
+		}
+	}
+	return s.Store.CreateTask(ctx, projectID, in)
+}
+
 func (s *Service) HumanTask(ctx context.Context, taskID string) (core.TaskDetails, error) {
 	t, err := s.Store.GetTask(ctx, taskID)
 	if err != nil {

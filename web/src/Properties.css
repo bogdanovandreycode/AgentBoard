@@ -1,1 +1,38 @@
-.property-row{display:grid;grid-template-columns:1.2fr .7fr 1fr 1.4fr;width:100%;gap:12px;align-items:center;border:0;border-bottom:1px solid var(--line);background:#141923;color:#c7cfda;padding:13px;text-align:left;font-size:12px}.property-row:not(.header):hover{background:#1b212d}.property-row.header{background:#0f131b;color:#758092;font-size:9px;text-transform:uppercase;letter-spacing:.08em}.property-row code{font-size:10px;color:#8490a1}
+.property-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.7fr 1fr 1.4fr;
+  width: 100%;
+  gap: 12px;
+  align-items: center;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: #141923;
+  color: #c7cfda;
+  padding: 13px;
+  text-align: left;
+  font-size: 12px;
+}
+.property-row:not(.header):hover {
+  background: #1b212d;
+}
+.property-row.header {
+  background: #0f131b;
+  color: #758092;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.property-row code {
+  font-size: 10px;
+  color: #8490a1;
+}
+.drawer-edit {
+  float: right;
+  margin-top: -20px;
+  border: 1px solid var(--line);
+  background: #1d2431;
+  color: #b7c0ce;
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 10px;
+}

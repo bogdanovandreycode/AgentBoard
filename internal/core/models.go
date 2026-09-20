@@ -147,10 +147,10 @@ type Board map[string][]Task
 
 type TaskDetails struct {
 	Task
-	History      []HistoryEntry `json:"history"`
-	TestRuns     []TestRun      `json:"test_runs"`
-	Usage        []UsageEvent   `json:"usage"`
-	SpawnedTasks []Task         `json:"spawned_tasks"`
+	History      []HistoryEntry
+	TestRuns     []TestRun
+	Usage        []UsageEvent
+	SpawnedTasks []Task
 }
 
 func Now() string { return time.Now().UTC().Format(time.RFC3339Nano) }

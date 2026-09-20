@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -131,6 +132,9 @@ func (s *Store) CreateWorker(ctx context.Context, projectID string, in core.Work
 	if in.Capabilities == "" {
 		in.Capabilities = "{}"
 	}
+	if !json.Valid([]byte(in.Capabilities)) {
+		return core.Worker{}, core.ErrInvalidInput
+	}
 	now := core.Now()
 	w := core.Worker{ID: newID(), ProjectID: projectID, Name: in.Name, Slug: in.Slug, Description: in.Description, Kind: in.Kind, Capabilities: in.Capabilities, Enabled: in.Enabled, CreatedAt: now, UpdatedAt: now}
 	_, err := s.DB.ExecContext(ctx, `INSERT INTO workers(id,project_id,name,slug,description,kind,enabled,capabilities,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, w.ID, projectID, w.Name, w.Slug, w.Description, w.Kind, w.Enabled, w.Capabilities, now, now)
@@ -186,6 +190,9 @@ func (s *Store) UpdateWorker(ctx context.Context, id string, in core.WorkerInput
 	}
 	if in.Capabilities == "" {
 		in.Capabilities = "{}"
+	}
+	if !json.Valid([]byte(in.Capabilities)) {
+		return core.Worker{}, core.ErrInvalidInput
 	}
 	_, err := s.DB.ExecContext(ctx, `UPDATE workers SET name=?,slug=?,description=?,kind=?,enabled=?,capabilities=?,updated_at=? WHERE id=?`, in.Name, in.Slug, in.Description, in.Kind, in.Enabled, in.Capabilities, core.Now(), id)
 	if err != nil {

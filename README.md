@@ -69,6 +69,29 @@ SQLite is stored outside managed workspaces.
 
 Managed projects contain only lightweight AgentBoard project metadata.
 
+## Quick start
+
+```powershell
+go build -o agentboard.exe ./cmd/agentboard
+./agentboard.exe init
+./agentboard.exe open
+```
+
+The UI opens at `http://127.0.0.1:7337`. Create one or more Workers, assign tasks, and launch an external agent with a Worker-scoped MCP server:
+
+```powershell
+./agentboard.exe mcp --project C:\path\to\project --worker codex
+```
+
+Other commands:
+
+```text
+agentboard serve [--addr 127.0.0.1:7337]
+agentboard version
+```
+
+Operational data is stored in the user's configuration directory, outside managed projects. `agentboard init` writes only `.agentboard/project.json` in the project and is safe to run repeatedly. Workers are logical identities; AgentBoard never launches AI processes automatically.
+
 ## Status
 
-MVP development.
+Local AgentBoard MVP.

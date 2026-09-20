@@ -19,6 +19,14 @@ func New(s *service.Service) http.Handler {
 		r.Get("/projects", a.listProjects)
 		r.Post("/projects", a.createProject)
 		r.Get("/projects/{projectID}/board", a.board)
+		r.Get("/projects/{projectID}/git", func(w http.ResponseWriter, r *http.Request) {
+			v, e := a.Service.ProjectGitInfo(r.Context(), chi.URLParam(r, "projectID"))
+			if e != nil {
+				writeError(w, e)
+				return
+			}
+			write(w, 200, v)
+		})
 		r.Post("/projects/{projectID}/tasks", a.createTask)
 		r.Get("/tasks/{taskID}", a.getTask)
 		r.Patch("/tasks/{taskID}", a.updateTask)
@@ -102,7 +110,7 @@ func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	v, e := a.Service.Store.CreateTask(r.Context(), chi.URLParam(r, "projectID"), in)
+	v, e := a.Service.HumanCreateTask(r.Context(), chi.URLParam(r, "projectID"), in)
 	if e != nil {
 		writeError(w, e)
 		return
