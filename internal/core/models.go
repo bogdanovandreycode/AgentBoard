@@ -112,6 +112,10 @@ type WorkerInput struct {
 	Enabled                                     bool
 }
 
+type PropertyDefinitionInput struct {
+	Name, Type, Options, Visibility string
+}
+
 type FeatureInput struct {
 	Title, Description, Reason, Priority, TestingMode string
 	Assignee                                          Assignee

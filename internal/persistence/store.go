@@ -255,6 +255,15 @@ func (s *Store) CreateTask(ctx context.Context, projectID string, in core.TaskIn
 			return t, err
 		}
 	}
+	for propertyID, value := range in.Properties {
+		var pid string
+		if err = tx.QueryRowContext(ctx, `SELECT id FROM property_definitions WHERE id=? AND project_id=?`, propertyID, projectID).Scan(&pid); err != nil {
+			return t, core.ErrInvalidInput
+		}
+		if _, err = tx.ExecContext(ctx, `INSERT INTO task_property_values(task_id,property_definition_id,value,updated_at) VALUES(?,?,?,?)`, t.ID, pid, value, now); err != nil {
+			return t, err
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		return t, err
 	}

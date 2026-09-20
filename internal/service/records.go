@@ -181,6 +181,73 @@ func (s *Service) ListTaskProperties(ctx context.Context, taskID string, agentVi
 	return out, rows.Err()
 }
 
+func (s *Service) ListPropertyDefinitions(ctx context.Context, projectID string) ([]core.PropertyDefinition, error) {
+	rows, err := s.Store.DB.QueryContext(ctx, `SELECT id,project_id,name,type,options,visibility,created_at,updated_at FROM property_definitions WHERE project_id=? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []core.PropertyDefinition
+	for rows.Next() {
+		var d core.PropertyDefinition
+		if err = rows.Scan(&d.ID, &d.ProjectID, &d.Name, &d.Type, &d.Options, &d.Visibility, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+func (s *Service) CreatePropertyDefinition(ctx context.Context, projectID string, in core.PropertyDefinitionInput) (core.PropertyDefinition, error) {
+	if err := validateDefinition(in); err != nil {
+		return core.PropertyDefinition{}, err
+	}
+	now := core.Now()
+	d := core.PropertyDefinition{ID: id(), ProjectID: projectID, Name: in.Name, Type: in.Type, Options: in.Options, Visibility: in.Visibility, CreatedAt: now, UpdatedAt: now}
+	if d.Options == "" {
+		d.Options = "[]"
+	}
+	_, err := s.Store.DB.ExecContext(ctx, `INSERT INTO property_definitions(id,project_id,name,type,options,visibility,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)`, d.ID, d.ProjectID, d.Name, d.Type, d.Options, d.Visibility, now, now)
+	return d, err
+}
+func (s *Service) UpdatePropertyDefinition(ctx context.Context, id string, in core.PropertyDefinitionInput) (core.PropertyDefinition, error) {
+	if err := validateDefinition(in); err != nil {
+		return core.PropertyDefinition{}, err
+	}
+	if in.Options == "" {
+		in.Options = "[]"
+	}
+	r, err := s.Store.DB.ExecContext(ctx, `UPDATE property_definitions SET name=?,type=?,options=?,visibility=?,updated_at=? WHERE id=?`, in.Name, in.Type, in.Options, in.Visibility, core.Now(), id)
+	if err != nil {
+		return core.PropertyDefinition{}, err
+	}
+	n, _ := r.RowsAffected()
+	if n == 0 {
+		return core.PropertyDefinition{}, core.ErrNotFound
+	}
+	var d core.PropertyDefinition
+	err = s.Store.DB.QueryRowContext(ctx, `SELECT id,project_id,name,type,options,visibility,created_at,updated_at FROM property_definitions WHERE id=?`, id).Scan(&d.ID, &d.ProjectID, &d.Name, &d.Type, &d.Options, &d.Visibility, &d.CreatedAt, &d.UpdatedAt)
+	return d, err
+}
+func (s *Service) DeletePropertyDefinition(ctx context.Context, id string) error {
+	r, err := s.Store.DB.ExecContext(ctx, `DELETE FROM property_definitions WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	n, _ := r.RowsAffected()
+	if n == 0 {
+		return core.ErrNotFound
+	}
+	return nil
+}
+func validateDefinition(in core.PropertyDefinitionInput) error {
+	types := map[string]bool{"text": true, "number": true, "boolean": true, "date": true, "datetime": true, "select": true, "multi_select": true, "url": true}
+	vis := map[string]bool{"human_only": true, "agent_read": true, "agent_read_write": true}
+	if strings.TrimSpace(in.Name) == "" || !types[in.Type] || !vis[in.Visibility] {
+		return core.ErrInvalidInput
+	}
+	return nil
+}
+
 func nullString(s string) *string {
 	if s == "" {
 		return nil

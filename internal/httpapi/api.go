@@ -37,6 +37,10 @@ func New(s *service.Service) http.Handler {
 		r.Get("/workers/{workerID}", a.worker)
 		r.Patch("/workers/{workerID}", a.updateWorker)
 		r.Delete("/workers/{workerID}", a.deleteWorker)
+		r.Get("/projects/{projectID}/properties", a.properties)
+		r.Post("/projects/{projectID}/properties", a.createProperty)
+		r.Patch("/properties/{propertyID}", a.updateProperty)
+		r.Delete("/properties/{propertyID}", a.deleteProperty)
 	})
 	return r
 }
@@ -266,6 +270,45 @@ func (a *API) updateWorker(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) deleteWorker(w http.ResponseWriter, r *http.Request) {
 	if e := a.Service.Store.ArchiveWorker(r.Context(), chi.URLParam(r, "workerID")); e != nil {
+		writeError(w, e)
+		return
+	}
+	w.WriteHeader(204)
+}
+func (a *API) properties(w http.ResponseWriter, r *http.Request) {
+	v, e := a.Service.ListPropertyDefinitions(r.Context(), chi.URLParam(r, "projectID"))
+	if e != nil {
+		writeError(w, e)
+		return
+	}
+	write(w, 200, v)
+}
+func (a *API) createProperty(w http.ResponseWriter, r *http.Request) {
+	var in core.PropertyDefinitionInput
+	if !decode(w, r, &in) {
+		return
+	}
+	v, e := a.Service.CreatePropertyDefinition(r.Context(), chi.URLParam(r, "projectID"), in)
+	if e != nil {
+		writeError(w, e)
+		return
+	}
+	write(w, 201, v)
+}
+func (a *API) updateProperty(w http.ResponseWriter, r *http.Request) {
+	var in core.PropertyDefinitionInput
+	if !decode(w, r, &in) {
+		return
+	}
+	v, e := a.Service.UpdatePropertyDefinition(r.Context(), chi.URLParam(r, "propertyID"), in)
+	if e != nil {
+		writeError(w, e)
+		return
+	}
+	write(w, 200, v)
+}
+func (a *API) deleteProperty(w http.ResponseWriter, r *http.Request) {
+	if e := a.Service.DeletePropertyDefinition(r.Context(), chi.URLParam(r, "propertyID")); e != nil {
 		writeError(w, e)
 		return
 	}

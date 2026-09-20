@@ -187,3 +187,33 @@ func TestArtifactsAndDependencyOutputs(t *testing.T) {
 		t.Fatalf("missing output: %#v", detail.Dependencies)
 	}
 }
+
+func TestCustomPropertyVisibility(t *testing.T) {
+	f := setup(t)
+	hidden, err := f.svc.CreatePropertyDefinition(f.ctx, f.project.ID, core.PropertyDefinitionInput{Name: "Budget", Type: "number", Visibility: "human_only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	visible, err := f.svc.CreatePropertyDefinition(f.ctx, f.project.ID, core.PropertyDefinitionInput{Name: "Asset style", Type: "text", Visibility: "agent_read_write"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := f.store.CreateTask(f.ctx, f.project.ID, core.TaskInput{Title: "Properties", State: "features", Assignee: workerAssignee(f.a.ID), TestingMode: "ai", Properties: map[string]string{hidden.ID: "100", visible.ID: "low-poly"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agent, err := f.svc.AgentTask(f.ctx, f.ac, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(agent.Properties) != 1 || agent.Properties[0].Name != "Asset style" {
+		t.Fatalf("agent properties: %#v", agent.Properties)
+	}
+	human, err := f.svc.HumanTask(f.ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(human.Properties) != 2 {
+		t.Fatalf("human properties: %#v", human.Properties)
+	}
+}

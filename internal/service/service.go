@@ -170,6 +170,16 @@ func (s *Service) CreateFeature(ctx context.Context, a core.AgentContext, in cor
 			return t, err
 		}
 	}
+	for name, value := range in.SuggestedProperties {
+		var propertyID string
+		err = tx.QueryRowContext(ctx, `SELECT id FROM property_definitions WHERE project_id=? AND name=? AND visibility='agent_read_write'`, a.Project.ID, name).Scan(&propertyID)
+		if err == nil {
+			_, err = tx.ExecContext(ctx, `INSERT INTO task_property_values(task_id,property_definition_id,value,updated_at) VALUES(?,?,?,?)`, t.ID, propertyID, value, now)
+		}
+		if err != nil && err != sql.ErrNoRows {
+			return t, err
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		return t, err
 	}
@@ -422,6 +432,18 @@ func (s *Service) HumanUpdateTask(ctx context.Context, taskID string, in core.Ta
 				return t, core.ErrInvalidInput
 			}
 			if _, err = tx.ExecContext(ctx, `INSERT INTO task_dependencies(task_id,depends_on_task_id,created_at) VALUES(?,?,?)`, taskID, d, core.Now()); err != nil {
+				return t, err
+			}
+		}
+	}
+	if in.Properties != nil {
+		for propertyID, value := range *in.Properties {
+			var pid string
+			if err = tx.QueryRowContext(ctx, `SELECT id FROM property_definitions WHERE id=? AND project_id=?`, propertyID, t.ProjectID).Scan(&pid); err != nil {
+				return t, core.ErrInvalidInput
+			}
+			_, err = tx.ExecContext(ctx, `INSERT INTO task_property_values(task_id,property_definition_id,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(task_id,property_definition_id) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`, taskID, pid, value, core.Now())
+			if err != nil {
 				return t, err
 			}
 		}
