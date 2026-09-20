@@ -99,6 +99,14 @@ type TaskInput struct {
 	Properties                                       map[string]string
 }
 
+type TaskUpdate struct {
+	Title, Description, Priority, TestingMode *string
+	AITestInstructions, HumanTestInstructions *string
+	Position                                  *float64
+	DependencyIDs                             *[]string
+	Properties                                *map[string]string
+}
+
 type WorkerInput struct {
 	Name, Slug, Description, Kind, Capabilities string
 	Enabled                                     bool

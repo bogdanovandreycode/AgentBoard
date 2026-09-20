@@ -348,6 +348,102 @@ func (s *Service) HumanMove(ctx context.Context, taskID, target string) (core.Ta
 	return s.Store.GetTask(ctx, taskID)
 }
 
+func (s *Service) HumanBoard(ctx context.Context, projectID string) (core.Board, error) {
+	tasks, err := s.Store.ListTasks(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	b := core.Board{"backlog": {}, "features": {}, "in_progress": {}, "testing": {}, "verification": {}, "complete": {}}
+	for i := range tasks {
+		tasks[i].Dependencies, _ = s.ListDependencies(ctx, tasks[i].ID)
+		b[tasks[i].State] = append(b[tasks[i].State], tasks[i])
+	}
+	return b, nil
+}
+
+func (s *Service) HumanTask(ctx context.Context, taskID string) (core.TaskDetails, error) {
+	t, err := s.Store.GetTask(ctx, taskID)
+	if err != nil {
+		return core.TaskDetails{}, err
+	}
+	t.Dependencies, _ = s.ListDependencies(ctx, taskID)
+	t.Artifacts, _ = s.ListArtifacts(ctx, taskID)
+	t.Properties, _ = s.ListTaskProperties(ctx, taskID, false)
+	d := core.TaskDetails{Task: t}
+	d.History, _ = s.ListHistory(ctx, taskID)
+	d.TestRuns, _ = s.ListTests(ctx, taskID)
+	d.Usage, _ = s.ListUsage(ctx, taskID)
+	d.SpawnedTasks, _ = s.Store.ListSpawned(ctx, taskID)
+	return d, nil
+}
+
+func (s *Service) HumanUpdateTask(ctx context.Context, taskID string, in core.TaskUpdate) (core.Task, error) {
+	t, err := s.Store.GetTask(ctx, taskID)
+	if err != nil {
+		return t, err
+	}
+	if in.Title != nil {
+		t.Title = *in.Title
+	}
+	if in.Description != nil {
+		t.Description = *in.Description
+	}
+	if in.Priority != nil {
+		t.Priority = *in.Priority
+	}
+	if in.TestingMode != nil {
+		t.TestingMode = *in.TestingMode
+	}
+	if in.AITestInstructions != nil {
+		t.AITestInstructions = *in.AITestInstructions
+	}
+	if in.HumanTestInstructions != nil {
+		t.HumanTestInstructions = *in.HumanTestInstructions
+	}
+	if in.Position != nil {
+		t.Position = *in.Position
+	}
+	tx, err := s.Store.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return t, err
+	}
+	defer tx.Rollback()
+	_, err = tx.ExecContext(ctx, `UPDATE tasks SET title=?,description=?,priority=?,testing_mode=?,ai_test_instructions=?,human_test_instructions=?,position=?,updated_at=? WHERE id=?`, t.Title, t.Description, t.Priority, t.TestingMode, t.AITestInstructions, t.HumanTestInstructions, t.Position, core.Now(), taskID)
+	if err != nil {
+		return t, err
+	}
+	if in.DependencyIDs != nil {
+		if _, err = tx.ExecContext(ctx, `DELETE FROM task_dependencies WHERE task_id=?`, taskID); err != nil {
+			return t, err
+		}
+		for _, d := range *in.DependencyIDs {
+			var projectID string
+			if err = tx.QueryRowContext(ctx, `SELECT project_id FROM tasks WHERE id=?`, d).Scan(&projectID); err != nil || projectID != t.ProjectID {
+				return t, core.ErrInvalidInput
+			}
+			if _, err = tx.ExecContext(ctx, `INSERT INTO task_dependencies(task_id,depends_on_task_id,created_at) VALUES(?,?,?)`, taskID, d, core.Now()); err != nil {
+				return t, err
+			}
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return t, err
+	}
+	return s.Store.GetTask(ctx, taskID)
+}
+
+func (s *Service) HumanDeleteTask(ctx context.Context, taskID string) error {
+	r, err := s.Store.DB.ExecContext(ctx, `DELETE FROM tasks WHERE id=?`, taskID)
+	if err != nil {
+		return err
+	}
+	n, _ := r.RowsAffected()
+	if n == 0 {
+		return core.ErrNotFound
+	}
+	return nil
+}
+
 func (s *Service) HumanComment(ctx context.Context, taskID, content string) (core.HistoryEntry, error) {
 	if _, err := s.Store.GetTask(ctx, taskID); err != nil {
 		return core.HistoryEntry{}, err
