@@ -1,0 +1,30 @@
+# Go
+/bin/
+/dist/
+*.exe
+
+# Runtime
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Local config
+.env
+.env.*
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# Embedded generated frontend
+internal/webui/dist/*
+!internal/webui/dist/.placeholder
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
