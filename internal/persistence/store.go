@@ -17,6 +17,9 @@ import (
 //go:embed migrations/001_initial.sql
 var initialMigration string
 
+//go:embed migrations/002_session_calls.sql
+var sessionCallsMigration string
+
 type Store struct{ DB *sql.DB }
 
 func DefaultDBPath() string {
@@ -48,6 +51,15 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	_, _ = db.Exec("INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES(1,?)", core.Now())
+	var v2 int
+	_ = db.QueryRow("SELECT count(*) FROM schema_migrations WHERE version=2").Scan(&v2)
+	if v2 == 0 {
+		if _, err = db.Exec(sessionCallsMigration); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("migrate v2: %w", err)
+		}
+		_, _ = db.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(2,?)", core.Now())
+	}
 	return &Store{DB: db}, nil
 }
 

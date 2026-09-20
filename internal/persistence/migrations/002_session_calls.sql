@@ -1,0 +1,1 @@
+ALTER TABLE worker_sessions ADD COLUMN mcp_calls INTEGER NOT NULL DEFAULT 0;
