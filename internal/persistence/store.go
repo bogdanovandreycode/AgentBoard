@@ -21,6 +21,9 @@ var initialMigration string
 //go:embed migrations/002_session_calls.sql
 var sessionCallsMigration string
 
+//go:embed migrations/003_session_activity.sql
+var sessionActivityMigration string
+
 type Store struct{ DB *sql.DB }
 
 func DefaultDBPath() string {
@@ -60,6 +63,32 @@ func Open(path string) (*Store, error) {
 			return nil, fmt.Errorf("migrate v2: %w", err)
 		}
 		_, _ = db.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(2,?)", core.Now())
+	}
+	// Acquire the SQLite write lock before checking the migration, so HTTP and
+	// MCP processes can safely start against the same database.
+	tx, err := db.Begin()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err = tx.Exec("UPDATE schema_migrations SET version=version WHERE version=1"); err == nil {
+		var count int
+		err = tx.QueryRow("SELECT count(*) FROM schema_migrations WHERE version=3").Scan(&count)
+		if err == nil && count == 0 {
+			_, err = tx.Exec(sessionActivityMigration)
+			if err == nil {
+				_, err = tx.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(3,?)", core.Now())
+			}
+		}
+	}
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		return nil, fmt.Errorf("migrate v3: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		db.Close()
+		return nil, err
 	}
 	return &Store{DB: db}, nil
 }
@@ -143,11 +172,16 @@ func (s *Store) CreateWorker(ctx context.Context, projectID string, in core.Work
 
 func scanWorker(row interface{ Scan(...any) error }) (core.Worker, error) {
 	var w core.Worker
-	err := row.Scan(&w.ID, &w.ProjectID, &w.Name, &w.Slug, &w.Description, &w.Kind, &w.Enabled, &w.Archived, &w.Capabilities, &w.CreatedAt, &w.UpdatedAt, &w.AssignedTaskCount)
+	err := row.Scan(&w.ID, &w.ProjectID, &w.Name, &w.Slug, &w.Description, &w.Kind, &w.Enabled, &w.Archived, &w.Capabilities, &w.CreatedAt, &w.UpdatedAt, &w.AssignedTaskCount, &w.ActiveSessionCount, &w.SessionCount, &w.MCPCalls, &w.LastActivityAt)
 	return w, err
 }
 
-const workerSelect = `SELECT w.id,w.project_id,w.name,w.slug,w.description,w.kind,w.enabled,w.archived,w.capabilities,w.created_at,w.updated_at,(SELECT count(*) FROM tasks t WHERE t.assignee_worker_id=w.id AND t.state!='complete') FROM workers w`
+const workerSelect = `SELECT w.id,w.project_id,w.name,w.slug,w.description,w.kind,w.enabled,w.archived,w.capabilities,w.created_at,w.updated_at,(SELECT count(*) FROM tasks t WHERE t.assignee_worker_id=w.id AND t.state!='complete'),
+(SELECT count(*) FROM worker_sessions s WHERE s.worker_id=w.id AND s.ended_at IS NULL AND julianday(s.last_seen_at)>julianday('now','-90 seconds')),
+(SELECT count(*) FROM worker_sessions s WHERE s.worker_id=w.id),
+(SELECT COALESCE(sum(s.mcp_calls),0) FROM worker_sessions s WHERE s.worker_id=w.id),
+(SELECT max(s.last_activity_at) FROM worker_sessions s WHERE s.worker_id=w.id)
+FROM workers w`
 
 func (s *Store) GetWorker(ctx context.Context, id string) (core.Worker, error) {
 	w, err := scanWorker(s.DB.QueryRowContext(ctx, workerSelect+` WHERE w.id=?`, id))
@@ -218,7 +252,7 @@ func (s *Store) StartSession(ctx context.Context, p core.Project, w core.Worker,
 	}
 	now := core.Now()
 	v := core.WorkerSession{ID: newID(), ProjectID: p.ID, WorkerID: w.ID, StartedAt: now, ClientInfo: client, CreatedAt: now}
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO worker_sessions(id,project_id,worker_id,started_at,client_info,created_at) VALUES(?,?,?,?,?,?)`, v.ID, v.ProjectID, v.WorkerID, now, client, now)
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO worker_sessions(id,project_id,worker_id,started_at,client_info,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?)`, v.ID, v.ProjectID, v.WorkerID, now, client, now, now)
 	return v, err
 }
 func (s *Store) EndSession(ctx context.Context, id string) error {

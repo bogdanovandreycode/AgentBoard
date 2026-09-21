@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   DndContext,
   useDraggable,
@@ -21,6 +21,8 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { WorkerDiagnostics } from "./WorkerDiagnostics";
+import { capabilityPresets, relativeTime } from "./workerPresentation";
 import "./App.css";
 import "./Properties.css";
 
@@ -35,6 +37,10 @@ type Worker = {
   Enabled: boolean;
   Archived: boolean;
   AssignedTaskCount: number;
+  ActiveSessionCount: number;
+  SessionCount: number;
+  MCPCalls: number;
+  LastActivityAt?: string;
 };
 type PropertyDef = {
   ID: string;
@@ -108,6 +114,7 @@ type Task = {
   CreatedByType: string;
   CreatorName: string;
   CreatedAt: string;
+  UpdatedAt: string;
   SourceTaskID?: string;
   TestingMode: string;
   AITestInstructions: string;
@@ -146,9 +153,16 @@ const short = (id: string) => id.slice(0, 8).toUpperCase();
 const date = (v: string) => new Date(v).toLocaleString();
 
 function App() {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const timer = window.setInterval(() => tick((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
   const qc = useQueryClient(),
     [tab, setTab] = useState<"board" | "workers" | "properties">("board"),
-    [projectID, setProjectID] = useState(""),
+    [projectID, setProjectID] = useState(
+      () => new URLSearchParams(location.search).get("project") || "",
+    ),
     [selected, setSelected] = useState<string>(),
     [create, setCreate] = useState(false),
     [filters, setFilters] = useState({
@@ -160,16 +174,19 @@ function App() {
   const projects = useQuery({
       queryKey: ["projects"],
       queryFn: () => api<Project[]>("/projects"),
+      refetchInterval: 10000,
     }),
-    active = projectID || projects.data?.[0]?.ID || "";
+    active = projects.data?.some((p) => p.ID === projectID) ? projectID : "";
   const workers = useQuery({
       queryKey: ["workers", active],
       queryFn: () => api<Worker[]>(`/projects/${active}/workers`),
+      refetchInterval: 4000,
       enabled: !!active,
     }),
     board = useQuery({
       queryKey: ["board", active],
       queryFn: () => api<Board>(`/projects/${active}/board`),
+      refetchInterval: 1000,
       enabled: !!active,
     });
   const refresh = () => {
@@ -184,17 +201,66 @@ function App() {
         }),
       onSuccess: refresh,
     });
+  const selectProject = (id: string) => {
+    const url = new URL(location.href);
+    if (id) url.searchParams.set("project", id);
+    else url.searchParams.delete("project");
+    history.pushState(null, "", url);
+    setProjectID(id);
+    setSelected(undefined);
+    setCreate(false);
+    setTab("board");
+  };
+  useEffect(() => {
+    const onPop = () => {
+      setProjectID(new URLSearchParams(location.search).get("project") || "");
+      setSelected(undefined);
+      setCreate(false);
+      setTab("board");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
   const onDragEnd = ({ active: drag, over }: DragEndEvent) => {
     if (over && drag.data.current?.state !== over.id)
       move.mutate({ id: String(drag.id), state: String(over.id) });
   };
   if (projects.isLoading) return <Empty title="Loading AgentBoard…" />;
-  if (!active)
+  if (projects.error)
     return (
       <Empty
-        title="No projects yet"
-        subtitle="Run agentboard init in a project folder, then reload."
+        title="Could not load projects"
+        subtitle={projects.error.message}
       />
+    );
+  if (!active)
+    return (
+      <main className="project-launcher">
+        <h1>AgentBoard</h1>
+        <h2>Projects</h2>
+        {projectID && (
+          <p role="alert">
+            The requested project is not registered on this server. Select a
+            project below.
+          </p>
+        )}
+        {!projects.data?.length && (
+          <p>
+            Run <code>agentboard init</code> in a project folder. This list
+            updates automatically.
+          </p>
+        )}
+        {projects.data?.map((p) => (
+          <button
+            className="project-tile"
+            key={p.ID}
+            onClick={() => selectProject(p.ID)}
+          >
+            <strong>{p.Name}</strong>
+            <span>{p.Path}</span>
+          </button>
+        ))}
+      </main>
     );
   return (
     <div className="app-shell">
@@ -209,7 +275,7 @@ function App() {
         <select
           className="project-select"
           value={active}
-          onChange={(e) => setProjectID(e.target.value)}
+          onChange={(e) => selectProject(e.target.value)}
         >
           {projects.data?.map((p) => (
             <option value={p.ID} key={p.ID}>
@@ -217,6 +283,7 @@ function App() {
             </option>
           ))}
         </select>
+        <button onClick={() => selectProject("")}>All projects</button>
         <nav>
           <button
             className={tab === "board" ? "active" : ""}
@@ -291,6 +358,10 @@ function App() {
           </>
         ) : tab === "workers" ? (
           <Workers
+            key={active}
+            projectPath={
+              projects.data?.find((p) => p.ID === active)?.Path || ""
+            }
             projectID={active}
             workers={workers.data || []}
             refresh={refresh}
@@ -482,6 +553,9 @@ function TaskCard({
           <span className="origin">Human</span>
         )}
       </div>
+      <small title={date(task.UpdatedAt)}>
+        Updated {relativeTime(task.UpdatedAt)}
+      </small>
     </article>
   );
 }
@@ -704,6 +778,7 @@ function TaskDrawer({
     q = useQuery({
       queryKey: ["task", id],
       queryFn: () => api<Details>(`/tasks/${id}`),
+      refetchInterval: 1000,
     }),
     reload = () => {
       qc.invalidateQueries({ queryKey: ["task", id] });
@@ -735,22 +810,28 @@ function TaskDrawer({
         <button className="icon-button close" onClick={close}>
           <X />
         </button>
-        <p>Loading…</p>
+        <p>{q.error ? q.error.message : "Loading…"}</p>
       </div>
     );
   const t = q.data;
   return (
     <div className="drawer-backdrop" onMouseDown={close}>
       <aside className="drawer" onMouseDown={(e) => e.stopPropagation()}>
-        <button className="icon-button close" onClick={close}>
-          <X />
-        </button>
-        <div className="drawer-key">
-          {short(t.ID)} · {t.State.replace("_", " ")}
+        <div className="drawer-header">
+          <div className="drawer-key">
+            {short(t.ID)} · {t.State.replaceAll("_", " ")}
+          </div>
+          <div className="drawer-actions">
+            <button onClick={() => setEditing(true)}>Edit task</button>
+            <button
+              className="icon-button"
+              aria-label="Close task"
+              onClick={close}
+            >
+              <X />
+            </button>
+          </div>
         </div>
-        <button className="drawer-edit" onClick={() => setEditing(true)}>
-          Edit task
-        </button>
         <h2>{t.Title}</h2>
         <p className="description">{t.Description || "No description."}</p>
         <div className="detail-grid">
@@ -1136,11 +1217,13 @@ function Tabs({
 }
 
 function Workers({
+  projectPath,
   projectID,
   workers,
   refresh,
 }: {
   projectID: string;
+  projectPath: string;
   workers: Worker[];
   refresh: () => void;
 }) {
@@ -1180,8 +1263,23 @@ function Workers({
             </span>
             <span>{w.Kind}</span>
             <span>
-              <i className={w.Enabled ? "enabled" : "disabled"} />
-              {w.Enabled ? "Enabled" : "Disabled"}
+              <i
+                className={
+                  w.Enabled && w.ActiveSessionCount > 0 ? "enabled" : "disabled"
+                }
+              />
+              {w.Enabled
+                ? w.ActiveSessionCount > 0
+                  ? "Active"
+                  : "Offline"
+                : "Disabled"}
+              <small>
+                {w.SessionCount} sessions · {w.MCPCalls} calls
+              </small>
+              <small>
+                Last MCP:{" "}
+                {w.LastActivityAt ? relativeTime(w.LastActivityAt) : "Never"}
+              </small>
             </span>
             <span className="capabilities">
               {capabilities(w.Capabilities).join(", ") || "—"}
@@ -1192,6 +1290,7 @@ function Workers({
       </div>
       {(adding || editing) && (
         <WorkerForm
+          projectPath={projectPath}
           projectID={projectID}
           worker={editing}
           close={() => {
@@ -1374,22 +1473,27 @@ function capabilities(raw: string) {
   }
 }
 function WorkerForm({
+  projectPath,
   projectID,
   worker,
   close,
   refresh,
 }: {
   projectID: string;
+  projectPath: string;
   worker?: Worker;
   close: () => void;
   refresh: () => void;
 }) {
+  const [preset, setPreset] = useState(worker ? "Custom" : "Generic");
   const [form, setForm] = useState({
       Name: worker?.Name || "",
       Slug: worker?.Slug || "",
       Description: worker?.Description || "",
       Kind: worker?.Kind || "external",
-      Capabilities: worker?.Capabilities || "{}",
+      Capabilities:
+        worker?.Capabilities ||
+        JSON.stringify(capabilityPresets.Generic, null, 2),
       Enabled: worker?.Enabled ?? true,
     }),
     save = useMutation({
@@ -1453,14 +1557,46 @@ function WorkerForm({
           Enabled
         </label>
         <label className="wide">
-          Capabilities JSON
+          Capability preset
+          <select
+            value={preset}
+            onChange={(e) => {
+              setPreset(e.target.value);
+              if (e.target.value !== "Custom")
+                setForm({
+                  ...form,
+                  Capabilities: JSON.stringify(
+                    capabilityPresets[e.target.value],
+                    null,
+                    2,
+                  ),
+                });
+            }}
+          >
+            {Object.keys(capabilityPresets).map((name) => (
+              <option key={name}>{name}</option>
+            ))}
+            <option>Custom</option>
+          </select>
+        </label>
+        <label className="wide">
+          Advanced: capabilities JSON
           <textarea
             className="mono"
+            rows={9}
             value={form.Capabilities}
-            onChange={(e) => setForm({ ...form, Capabilities: e.target.value })}
+            onChange={(e) => {
+              setPreset("Custom");
+              setForm({ ...form, Capabilities: e.target.value });
+            }}
           />
         </label>
       </div>
+      {save.error && <p role="alert">{save.error.message}</p>}
+      {archive.error && <p role="alert">{archive.error.message}</p>}
+      {worker && (
+        <WorkerDiagnostics worker={worker} projectPath={projectPath} />
+      )}
       {worker && (
         <button className="danger-link" onClick={() => archive.mutate()}>
           Archive worker

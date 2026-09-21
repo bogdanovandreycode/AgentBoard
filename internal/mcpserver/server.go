@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/bogdanovandreycode/agentboard/internal/core"
 	"github.com/bogdanovandreycode/agentboard/internal/service"
@@ -15,17 +16,46 @@ type Server struct {
 	Agent   core.AgentContext
 }
 
+const instructions = `AgentBoard is the task source of truth for this worker.
+At the start of a work session call get_my_board. Continue in_progress tasks first;
+otherwise select an assigned feature. Use AgentBoard tools for task state, history,
+testing and usage. Only move forward using the explicit workflow tools and respect
+human testing requirements. Never read or modify AgentBoard SQLite storage directly.
+AgentBoard MCP is the only supported worker interface. These capabilities enforce
+workflow permissions; OS-level isolation requires a sandbox.`
+
 func New(s *service.Service, a core.AgentContext, version string) *Server {
 	x := &Server{Service: s, Agent: a}
-	x.MCP = mcp.NewServer(&mcp.Implementation{Name: "agentboard", Version: version}, nil)
+	x.MCP = mcp.NewServer(&mcp.Implementation{Name: "agentboard", Version: version}, &mcp.ServerOptions{Instructions: instructions})
+	x.MCP.AddResource(&mcp.Resource{URI: "agentboard://current-worker", Name: "Current AgentBoard worker", MIMEType: "application/json"}, func(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
+		b, err := json.Marshal(map[string]string{"project": a.Project.Name, "project_id": a.Project.ID, "worker": a.Worker.Name, "worker_id": a.Worker.ID, "instructions": instructions})
+		if err != nil {
+			return nil, err
+		}
+		return &mcp.ReadResourceResult{Contents: []*mcp.ResourceContents{{URI: "agentboard://current-worker", MIMEType: "application/json", Text: string(b)}}}, nil
+	})
 	x.register()
 	return x
 }
 func (s *Server) Run(ctx context.Context, transport mcp.Transport) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_ = s.Service.Store.TouchSession(ctx, s.Agent.Session.ID)
+			}
+		}
+	}()
 	return s.MCP.Run(ctx, transport)
 }
 func (s *Server) count(ctx context.Context) {
-	_, _ = s.Service.Store.DB.ExecContext(ctx, `UPDATE worker_sessions SET mcp_calls=mcp_calls+1 WHERE id=?`, s.Agent.Session.ID)
+	_, _ = s.Service.Store.DB.ExecContext(ctx, `UPDATE worker_sessions SET mcp_calls=mcp_calls+1,last_activity_at=?,last_seen_at=? WHERE id=?`, core.Now(), core.Now(), s.Agent.Session.ID)
 }
 func output(v any) (*mcp.CallToolResult, any, error) {
 	b, _ := json.Marshal(v)

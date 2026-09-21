@@ -23,11 +23,15 @@ type Worker struct {
 	Enabled, Archived                                          bool
 	CreatedAt, UpdatedAt                                       string
 	AssignedTaskCount                                          int
+	ActiveSessionCount, SessionCount, MCPCalls                 int64
+	LastActivityAt                                             *string
 }
 
 type WorkerSession struct {
 	ID, ProjectID, WorkerID, StartedAt, ClientInfo, CreatedAt string
 	EndedAt                                                   *string
+	LastActivityAt, LastSeenAt                                *string
+	MCPCalls                                                  int64
 }
 
 type Task struct {

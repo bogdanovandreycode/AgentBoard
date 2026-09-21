@@ -29,3 +29,8 @@ internal/webui/dist/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Machine-local project registration and browser validation
+/.agentboard/
+/.playwright-cli/
+/output/playwright/

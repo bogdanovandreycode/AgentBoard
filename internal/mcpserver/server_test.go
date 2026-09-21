@@ -2,7 +2,9 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bogdanovandreycode/agentboard/internal/core"
@@ -39,6 +41,24 @@ func TestCompleteMCPToolSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cs.Close()
+	if !strings.Contains(cs.InitializeResult().Instructions, "get_my_board") || !strings.Contains(cs.InitializeResult().Instructions, "Never read or modify") {
+		t.Fatal("missing worker instructions")
+	}
+	resources, err := cs.ListResources(ctx, nil)
+	if err != nil || len(resources.Resources) != 1 || resources.Resources[0].URI != "agentboard://current-worker" {
+		t.Fatalf("resources: %v %v", resources, err)
+	}
+	resource, err := cs.ReadResource(ctx, &mcp.ReadResourceParams{URI: "agentboard://current-worker"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var identity map[string]string
+	if err := json.Unmarshal([]byte(resource.Contents[0].Text), &identity); err != nil {
+		t.Fatal(err)
+	}
+	if identity["worker_id"] != a.ID || identity["project_id"] != p.ID {
+		t.Fatalf("wrong identity: %v", identity)
+	}
 	tools, err := cs.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -67,4 +87,12 @@ func TestCompleteMCPToolSurface(t *testing.T) {
 	call("record_test_run", map[string]any{"task_id": task.ID, "runner": "go", "type": "automated", "status": "passed", "summary": "ok"})
 	call("move_to_verification", map[string]any{"task_id": task.ID})
 	call("report_usage", map[string]any{"task_id": task.ID, "provider": "openai", "model": "gpt", "input_tokens": 10.0})
+	activity, err := st.GetWorker(ctx, a.ID)
+	if err != nil || activity.MCPCalls != 11 || activity.LastActivityAt == nil || activity.ActiveSessionCount != 1 {
+		t.Fatalf("activity: %+v %v", activity, err)
+	}
+	other, err := st.GetWorker(ctx, b.ID)
+	if err != nil || other.MCPCalls != 0 || other.LastActivityAt != nil {
+		t.Fatalf("activity leaked: %+v %v", other, err)
+	}
 }

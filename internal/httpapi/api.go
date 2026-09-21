@@ -16,6 +16,9 @@ func New(s *service.Service) http.Handler {
 	a := &API{Service: s}
 	r := chi.NewRouter()
 	r.Route("/api", func(r chi.Router) {
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			write(w, 200, map[string]string{"Service": "agentboard"})
+		})
 		r.Get("/projects", a.listProjects)
 		r.Post("/projects", a.createProject)
 		r.Get("/projects/{projectID}/board", a.board)
@@ -43,6 +46,14 @@ func New(s *service.Service) http.Handler {
 		r.Get("/projects/{projectID}/workers", a.workers)
 		r.Post("/projects/{projectID}/workers", a.createWorker)
 		r.Get("/workers/{workerID}", a.worker)
+		r.Get("/workers/{workerID}/sessions", func(w http.ResponseWriter, r *http.Request) {
+			v, err := a.Service.Store.ListWorkerSessions(r.Context(), chi.URLParam(r, "workerID"))
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			write(w, http.StatusOK, v)
+		})
 		r.Patch("/workers/{workerID}", a.updateWorker)
 		r.Delete("/workers/{workerID}", a.deleteWorker)
 		r.Get("/projects/{projectID}/properties", a.properties)

@@ -86,6 +86,7 @@ The UI opens at `http://127.0.0.1:7337`. Create one or more Workers, assign task
 Other commands:
 
 ```text
+agentboard open [--addr 127.0.0.1:7337] [project-path]
 agentboard serve [--addr 127.0.0.1:7337]
 agentboard version
 ```
@@ -95,3 +96,48 @@ Operational data is stored in the user's configuration directory, outside manage
 ## Status
 
 Local AgentBoard MVP.
+
+## Project launcher and live updates
+
+`agentboard open` finds `.agentboard/project.json` in the current directory or its
+parents and opens `/?project=<id>`. `agentboard open .` and an explicit directory
+work too. Outside a registered project, the browser opens a project chooser.
+Invalid markers are reported; an unknown project ID in the URL shows the chooser
+with an explanation. Browser Back/Forward and the project selector update the URL.
+An already running AgentBoard server is reused. CLI flags go before the directory.
+
+The visible board and open task (including history, tests, artifacts and usage)
+refresh every second. Workers refresh every 4 seconds and projects every 10 seconds.
+Polling pauses in background tabs and resumes on focus; unsaved form input is kept.
+
+Worker forms provide Generic, Coding, Graphics and Reviewer capability presets,
+with editable JSON for custom capabilities. Capabilities describe the worker;
+they do not grant workflow permissions.
+
+## MCP discovery and diagnostics
+
+The MCP initialize response includes worker instructions. The read-only resource
+`agentboard://current-worker` identifies the configured worker and project and
+points clients to `get_my_board`. All 11 worker tools and existing permissions
+remain available. Resources are discovery metadata, not a substitute for tools.
+
+Workers show active/offline status, total session and MCP-call counts, and the last
+MCP call time. Open a worker to inspect its latest 50 sessions or copy its Codex
+TOML configuration (requires `agentboard` on PATH). The human REST API adds
+`GET /api/workers/{workerID}/sessions`; worker responses add `ActiveSessionCount`,
+`SessionCount`, `MCPCalls`, and nullable `LastActivityAt`. Sessions include nullable
+`LastActivityAt` and `LastSeenAt`, plus `MCPCalls`. `GET /api/health` identifies the server.
+
+MCP processes send a heartbeat every 15 seconds. Sessions without a heartbeat for
+90 seconds are offline, including processes that crashed without setting `EndedAt`.
+Last MCP activity measures tool calls, not heartbeats or resource discovery.
+Pre-upgrade sessions have unknown activity timestamps and are not marked active
+until a new process sends heartbeats. Migration 3 preserves all existing data.
+
+Never read or modify AgentBoard SQLite storage directly for worker tasks: MCP is
+the supported worker interface. This is a workflow/capability boundary, not an OS
+security boundary. Filesystem isolation requires running the worker in a sandbox.
+
+For self-dogfooding, initialize this repository, register a worker through the UI,
+and use MCP to create/advance its assigned features, record tests and add history.
+Final acceptance in Complete remains human-owned.

@@ -114,3 +114,10 @@ If the entire implementation cannot be completed in one session:
 - commit completed milestones;
 - document unfinished work in IMPLEMENTATION_STATUS.md;
 - do not claim unfinished functionality is complete.
+
+## Worker interface
+
+Never read or modify AgentBoard SQLite storage directly while performing worker tasks.
+AgentBoard MCP is the only supported worker interface. Begin with get_my_board.
+This does not prohibit implementing persistence code or testing against temporary databases.
+MCP permissions are a workflow boundary, not OS isolation; use a sandbox for filesystem isolation.

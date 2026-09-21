@@ -26,13 +26,3 @@
   font-size: 10px;
   color: #8490a1;
 }
-.drawer-edit {
-  float: right;
-  margin-top: -20px;
-  border: 1px solid var(--line);
-  background: #1d2431;
-  color: #b7c0ce;
-  border-radius: 6px;
-  padding: 5px 9px;
-  font-size: 10px;
-}

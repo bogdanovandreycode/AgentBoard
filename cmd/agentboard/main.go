@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -87,6 +88,30 @@ func serveCommand(args []string, open bool) error {
 	if err := f.Parse(args); err != nil {
 		return err
 	}
+	if f.NArg() > 1 || (!open && f.NArg() != 0) {
+		return errors.New("usage: agentboard open [--addr address] [--db path] [project-path]")
+	}
+	url := "http://" + *addr
+	if open {
+		path := "."
+		if f.NArg() == 1 {
+			path = f.Arg(0)
+		}
+		var err error
+		url, err = launcherURL(url, path)
+		if err != nil {
+			return err
+		}
+		// Reuse an existing AgentBoard server without starting another process.
+		if agentBoardRunning("http://" + *addr) {
+			return openURL(url)
+		}
+	}
+	listener, err := net.Listen("tcp", *addr)
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
 	st, err := persistence.Open(*db)
 	if err != nil {
 		return err
@@ -110,7 +135,6 @@ func serveCommand(args []string, open bool) error {
 		defer cancel()
 		_ = server.Shutdown(shutdownCtx)
 	}()
-	url := "http://" + *addr
 	if open {
 		go func() {
 			time.Sleep(250 * time.Millisecond)
@@ -120,7 +144,7 @@ func serveCommand(args []string, open bool) error {
 		}()
 	}
 	log.Printf("AgentBoard %s listening on %s", version, url)
-	err = server.ListenAndServe()
+	err = server.Serve(listener)
 	if err == http.ErrServerClosed {
 		return nil
 	}

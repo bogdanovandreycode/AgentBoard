@@ -3,6 +3,8 @@ package httpapi
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"github.com/bogdanovandreycode/agentboard/internal/core"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -46,4 +48,44 @@ func TestHumanAPIProjectWorkerTaskFlow(t *testing.T) {
 		t.Fatalf("projects: %d", got)
 	}
 	_ = http.StatusOK
+}
+
+func TestWorkerSessionDiagnostics(t *testing.T) {
+	ctx := context.Background()
+	st, err := persistence.Open(filepath.Join(t.TempDir(), "api.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	p, err := st.EnsureProject(ctx, "test", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	worker, err := st.CreateWorker(ctx, p.ID, core.WorkerInput{Name: "Codex", Slug: "codex", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := st.StartSession(ctx, p, worker, "test client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := New(service.New(st))
+	request := httptest.NewRequest("GET", "/api/workers/"+worker.ID+"/sessions", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != 200 {
+		t.Fatalf("sessions: %d %s", response.Code, response.Body.String())
+	}
+	var sessions []core.WorkerSession
+	if err := json.Unmarshal(response.Body.Bytes(), &sessions); err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 || sessions[0].ID != session.ID || sessions[0].LastSeenAt == nil {
+		t.Fatalf("sessions: %+v", sessions)
+	}
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, httptest.NewRequest("GET", "/api/workers/missing/sessions", nil))
+	if response.Code != 404 {
+		t.Fatalf("missing worker: %d", response.Code)
+	}
 }
