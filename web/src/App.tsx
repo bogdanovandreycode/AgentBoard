@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import {
   DndContext,
+  DragOverlay,
   useDraggable,
   useDroppable,
   type DragEndEvent,
+  type DragStartEvent,
 } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "primereact/button";
@@ -31,6 +33,8 @@ import {
   Columns3,
   Filter,
   GripVertical,
+  Search,
+  Upload,
   Plus,
   Settings2,
   Sparkles,
@@ -40,6 +44,7 @@ import {
 } from "lucide-react";
 import { WorkerDiagnostics } from "./WorkerDiagnostics";
 import { SelectField } from "./SelectField";
+import { MarkdownField, MarkdownView } from "./MarkdownField";
 import { capabilityPresets, relativeTime } from "./workerPresentation";
 import "./App.css";
 import "./Properties.css";
@@ -178,17 +183,21 @@ function App() {
     return () => window.clearInterval(timer);
   }, []);
   const qc = useQueryClient(),
-    [tab, setTab] = useState<"board" | "workers" | "properties">("board"),
+    [tab, setTab] = useState<"board" | "workers" | "properties" | "import">("board"),
     [projectID, setProjectID] = useState(
       () => new URLSearchParams(location.search).get("project") || "",
     ),
     [selected, setSelected] = useState<string>(),
     [create, setCreate] = useState(false),
+    [searchOpen, setSearchOpen] = useState(false),
+    [draggedID, setDraggedID] = useState<string>(),
+    [boardMode, setBoardMode] = useState<"fit" | "wide">(() => localStorage.getItem("agentboard-board-mode") === "wide" ? "wide" : "fit"),
     [filters, setFilters] = useState({
       responsible: "all",
       priority: "all",
       origin: "all",
       testing: "all",
+      search: "",
     });
   const projects = useQuery({
       queryKey: ["projects"],
@@ -241,8 +250,16 @@ function App() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   const onDragEnd = ({ active: drag, over }: DragEndEvent) => {
+    setDraggedID(undefined);
     if (over && drag.data.current?.state !== over.id)
       move.mutate({ id: String(drag.id), state: String(over.id) });
+  };
+  const onDragStart = ({ active: drag }: DragStartEvent) => setDraggedID(String(drag.id));
+  const allTasks = Object.values(board.data || {}).flat();
+  const draggedTask = allTasks.find((task) => task.ID === draggedID);
+  const changeBoardMode = (mode: "fit" | "wide") => {
+    setBoardMode(mode);
+    localStorage.setItem("agentboard-board-mode", mode);
   };
   if (projects.isLoading) return <Empty title="Loading AgentBoard…" />;
   if (projects.error)
@@ -311,6 +328,10 @@ function App() {
             <Settings2 />
             Properties
           </Button>
+          <Button className={tab === "import" ? "active" : ""} onClick={() => setTab("import")}>
+            <Upload />
+            Import tasks
+          </Button>
         </nav>
         <div className="sidebar-note">
           <Bot size={16} />
@@ -328,7 +349,7 @@ function App() {
                 ? "Project board"
                 : tab === "workers"
                   ? "Workers"
-                  : "Custom properties"}
+                  : tab === "properties" ? "Custom properties" : "Import tasks"}
             </h1>
           </div>
           {tab === "board" && (
@@ -344,9 +365,14 @@ function App() {
               filters={filters}
               setFilters={setFilters}
               workers={workers.data || []}
+              openSearch={() => setSearchOpen(true)}
             />
-            <DndContext onDragEnd={onDragEnd}>
-              <div className="board">
+            <div className="board-mode" role="group" aria-label="Board layout">
+              <button className={boardMode === "fit" ? "active" : ""} onClick={() => changeBoardMode("fit")}>Fit all columns</button>
+              <button className={boardMode === "wide" ? "active" : ""} onClick={() => changeBoardMode("wide")}>Wide columns</button>
+            </div>
+            <DndContext onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDraggedID(undefined)}>
+              <div className="board-scroller"><div key={boardMode} className={`board board--${boardMode}`}>
                 {states.map(([key, label]) => (
                   <Column
                     key={key}
@@ -358,7 +384,8 @@ function App() {
                     onOpen={setSelected}
                   />
                 ))}
-              </div>
+              </div></div>
+              <DragOverlay dropAnimation={null} zIndex={10000}>{draggedTask && <div className="task-drag-overlay"><div className="task-key">{short(draggedTask.ID)}</div><h3>{draggedTask.Title}</h3><p>{draggedTask.Description}</p></div>}</DragOverlay>
             </DndContext>
             {move.error && <Message severity="error" text={move.error.message} className="action-error" />}
           </>
@@ -372,8 +399,10 @@ function App() {
             workers={workers.data || []}
             refresh={refresh}
           />
-        ) : (
+        ) : tab === "properties" ? (
           <Properties projectID={active} />
+        ) : (
+          <ImportTasks projectID={active} workers={workers.data || []} workersLoading={workers.isLoading} refresh={refresh} />
         )}
       </main>
       {selected && (
@@ -392,6 +421,7 @@ function App() {
           refresh={refresh}
         />
       )}
+      {searchOpen && <SearchTasks tasks={allTasks} onOpen={(id) => { setSearchOpen(false); setSelected(id); }} close={() => setSearchOpen(false)} />}
     </div>
   );
 }
@@ -399,10 +429,12 @@ function FilterBar({
   filters,
   setFilters,
   workers,
+  openSearch,
 }: {
   filters: any;
   setFilters: (v: any) => void;
   workers: Worker[];
+  openSearch: () => void;
 }) {
   const field = (key: string, children: React.ReactNode) => (
     <SelectField
@@ -455,7 +487,9 @@ function FilterBar({
           <option value="human">Human</option>
           <option value="hybrid">Hybrid</option>
         </>,
-      )}</div>} />
+      )}
+      <div className="filter-search"><Search size={15} /><InputText aria-label="Search tasks" placeholder="Search tasks…" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} /><Button label="Expand" aria-label="Open task search" icon="pi pi-external-link" text onClick={openSearch} /></div>
+      </div>} />
   );
 }
 function matches(t: Task, f: any) {
@@ -465,8 +499,79 @@ function matches(t: Task, f: any) {
       f.responsible === t.AssigneeWorkerID) &&
     (f.priority === "all" || f.priority === t.Priority) &&
     (f.origin === "all" || f.origin === t.CreatedByType) &&
-    (f.testing === "all" || f.testing === t.TestingMode)
+    (f.testing === "all" || f.testing === t.TestingMode) &&
+    (!f.search || `${t.ID} ${t.Title} ${t.Description} ${t.AssigneeName}`.toLocaleLowerCase().includes(f.search.toLocaleLowerCase().trim()))
   );
+}
+function SearchTasks({ tasks, onOpen, close }: { tasks: Task[]; onOpen: (id: string) => void; close: () => void }) {
+  const [query, setQuery] = useState("");
+  const [visible, setVisible] = useState(true);
+  const [pendingID, setPendingID] = useState<string>();
+  const results = tasks.filter((task) => `${task.ID} ${task.Title} ${task.Description} ${task.AssigneeName}`.toLocaleLowerCase().includes(query.toLocaleLowerCase().trim()));
+  return <Dialog header="Search tasks" visible={visible} onHide={() => setVisible(false)} transitionOptions={{ timeout: 250, onExited: () => pendingID ? onOpen(pendingID) : close() }} modal blockScroll draggable={false} className="search-dialog" style={{ width: "90vw", height: "90vh" }}>
+    <div className="search-dialog-body">
+      <div className="search-dialog-input"><Search size={19} /><InputText autoFocus placeholder="Search by title, description, ID or worker" aria-label="Search all tasks" value={query} onChange={(e) => setQuery(e.target.value)} /></div>
+      <p>{results.length} {results.length === 1 ? "task" : "tasks"}</p>
+      <div className="search-results">{results.map((task) => <button key={task.ID} onClick={() => { setPendingID(task.ID); setVisible(false); }}>
+        <span className="task-key">{short(task.ID)} · {task.State.replaceAll("_", " ")}</span><strong>{task.Title}</strong><span>{task.Description || "No description"}</span>
+      </button>)}{!results.length && <Message severity="info" text="No matching tasks" />}</div>
+    </div>
+  </Dialog>;
+}
+
+type ImportFile = {
+  version: number;
+  tasks: { key?: string; title: string; description?: string; state?: string; priority?: string; testing_mode?: string; assignee?: { type: string; worker?: string }; ai_test_instructions?: string; human_test_instructions?: string; properties?: Record<string, string>; depends_on?: string[] }[];
+};
+
+function ImportTasks({ projectID, workers, workersLoading, refresh }: { projectID: string; workers: Worker[]; workersLoading: boolean; refresh: () => void }) {
+  const properties = useQuery({ queryKey: ["properties", projectID], queryFn: () => api<PropertyDef[]>(`/projects/${projectID}/properties`) });
+  const [fileName, setFileName] = useState("");
+  const [document, setDocument] = useState<ImportFile>();
+  const [error, setError] = useState("");
+  const [result, setResult] = useState("");
+  const importMutation = useMutation({
+    mutationFn: (input: ImportFile) => api<{ imported: number }>(`/projects/${projectID}/tasks/import`, { method: "POST", body: JSON.stringify(input) }),
+    onSuccess: (response) => { setResult(`Imported ${response.imported} tasks.`); setDocument(undefined); setFileName(""); refresh(); },
+  });
+  const firstWorker = workers.find((worker) => worker.Enabled);
+  const template: ImportFile = { version: 1, tasks: [
+    { key: "example-1", title: "Example task", description: "**Describe the work** here.", state: "backlog", priority: "medium", testing_mode: "ai", assignee: firstWorker ? { type: "worker", worker: firstWorker.Slug } : { type: "unassigned" }, ai_test_instructions: "Run the relevant checks.", human_test_instructions: "", properties: Object.fromEntries((properties.data || []).map((property) => [property.Name, ""])) },
+    { key: "example-2", title: "Follow-up task", state: "features", priority: "low", testing_mode: "human", assignee: { type: "human" }, depends_on: ["example-1"] },
+  ] };
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(template, null, 2)], { type: "application/json" }));
+    const link = window.document.createElement("a");
+    link.href = url;
+    link.download = "agentboard-import-template.json";
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const readFile = async (file?: File) => {
+    setError(""); setResult(""); setDocument(undefined); setFileName(file?.name || "");
+    if (!file) return;
+    try {
+      const parsed: unknown = JSON.parse(await file.text());
+      if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as ImportFile).tasks) || (parsed as ImportFile).version !== 1) throw new Error("Expected { version: 1, tasks: [...] }.");
+      setDocument(parsed as ImportFile);
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not read JSON file."); }
+  };
+  return <div className="import-page">
+    <div className="import-intro"><h2>Import tasks from JSON</h2><p>Prepare a UTF-8 JSON file, preview its task count, then import into this project. The whole file is validated and saved together.</p></div>
+    <div className="import-grid"><section className="import-panel"><h3>1. Download a current template</h3><p>The template includes this project's current custom property names and an available worker slug. It updates when Workers or Properties change.</p><Button label="Download JSON template" icon="pi pi-download" onClick={download} disabled={properties.isLoading || workersLoading} />
+      <h3>Format</h3><ul><li><code>version</code> must be <code>1</code>; <code>tasks</code> contains 1–1000 objects.</li><li><code>title</code> is required. State: backlog, features, in_progress, testing, verification, complete.</li><li>Priority: critical, high, medium, low. Testing: ai, human, hybrid.</li><li>Use <code>assignee.type</code> = unassigned, human, or worker. For workers, set <code>worker</code> to an existing slug or ID.</li><li><code>properties</code> maps current property names or IDs to string values.</li><li>Give tasks a unique <code>key</code> to use <code>depends_on</code> links within this file. IDs are generated on import.</li></ul>
+      <p>All imported tasks are created by Human and receive a System creation event.</p>
+    </section><section className="import-panel"><h3>2. Choose a file</h3><input type="file" accept=".json,application/json" aria-label="Import JSON file" onChange={(e) => void readFile(e.target.files?.[0])} />
+      {fileName && <p>Selected: <strong>{fileName}</strong></p>}
+      {document && <p>Ready to import <strong>{document.tasks.length}</strong> tasks.</p>}
+      {error && <Message severity="error" text={error} />}
+      {importMutation.error && <Message severity="error" text={importMutation.error.message} />}
+      {result && <Message severity="success" text={result} />}
+      <Button className="primary" label="Import tasks" icon="pi pi-upload" disabled={!document || importMutation.isPending} loading={importMutation.isPending} onClick={() => document && importMutation.mutate(document)} />
+      <h3>Minimal example</h3><pre>{JSON.stringify({ version: 1, tasks: [{ title: "My first imported task" }] }, null, 2)}</pre>
+      <h3>Project template example</h3><pre>{JSON.stringify(template, null, 2)}</pre>
+    </section></div>
+  </div>;
 }
 function Column({
   state,
@@ -579,6 +684,7 @@ function TaskForm({
   close: () => void;
   refresh: () => void;
 }) {
+  const [saved, setSaved] = useState(false);
   const definitions = useQuery({
       queryKey: ["properties", projectID],
       queryFn: () => api<PropertyDef[]>(`/projects/${projectID}/properties`),
@@ -618,11 +724,11 @@ function TaskForm({
         }),
       onSuccess: () => {
         refresh();
-        close();
+        setSaved(true);
       },
     });
   return (
-    <Modal title="Create task" close={close}>
+    <Modal title="Create task" close={close} closing={saved}>
       <div className="form-grid">
         <label className="wide">
           Title
@@ -634,10 +740,7 @@ function TaskForm({
         </label>
         <label className="wide">
           Description
-          <InputTextarea
-            value={form.Description}
-            onChange={(e) => setForm({ ...form, Description: e.target.value })}
-          />
+          <MarkdownField value={form.Description} onChange={(value) => setForm({ ...form, Description: value })} />
         </label>
         <label>
           State
@@ -743,21 +846,11 @@ function TaskForm({
         ))}
         <label className="wide">
           AI test instructions
-          <InputTextarea
-            value={form.AITestInstructions}
-            onChange={(e) =>
-              setForm({ ...form, AITestInstructions: e.target.value })
-            }
-          />
+          <MarkdownField value={form.AITestInstructions} onChange={(value) => setForm({ ...form, AITestInstructions: value })} />
         </label>
         <label className="wide">
           Human test instructions
-          <InputTextarea
-            value={form.HumanTestInstructions}
-            onChange={(e) =>
-              setForm({ ...form, HumanTestInstructions: e.target.value })
-            }
-          />
+          <MarkdownField value={form.HumanTestInstructions} onChange={(value) => setForm({ ...form, HumanTestInstructions: value })} />
         </label>
       </div>
       {save.error && <Message severity="error" text={save.error.message} className="action-error" />}
@@ -783,6 +876,7 @@ function TaskDrawer({
   refresh: () => void;
 }) {
   const [editing, setEditing] = useState(false),
+    [visible, setVisible] = useState(true),
     qc = useQueryClient(),
     q = useQuery({
       queryKey: ["task", id],
@@ -815,13 +909,13 @@ function TaskDrawer({
     });
   if (!q.data)
     return (
-      <Sidebar visible onHide={close} position="right" className="task-sidebar">
+      <Sidebar visible={visible} onHide={() => setVisible(false)} transitionOptions={{ timeout: 250, onExited: close }} position="right" className="task-sidebar">
         {q.error ? <Message severity="error" text={q.error.message} /> : <ProgressSpinner />}
       </Sidebar>
     );
   const t = q.data;
   return (
-    <Sidebar visible onHide={close} position="right" className="task-sidebar" showCloseIcon={false} blockScroll>
+    <Sidebar visible={visible} onHide={() => setVisible(false)} transitionOptions={{ timeout: 250, onExited: close }} position="right" className="task-sidebar" showCloseIcon={false} blockScroll>
       <aside className="drawer">
         <div className="drawer-header">
           <div className="drawer-key">
@@ -832,14 +926,14 @@ function TaskDrawer({
             <Button
               className="icon-button"
               aria-label="Close task"
-              onClick={close}
+              onClick={() => setVisible(false)}
             >
               <X />
             </Button>
           </div>
         </div>
         <h2>{t.Title}</h2>
-        <p className="description">{t.Description || "No description."}</p>
+        <div className="description"><MarkdownView value={t.Description || "No description."} /></div>
         <div className="detail-grid">
           <Info
             label="Created by"
@@ -877,11 +971,11 @@ function TaskDrawer({
         <Panel className="detail-panel" header="Test instructions">
           <div className="instruction">
             <Tag value="AI" severity="info" />
-            <span>{t.AITestInstructions || "None"}</span>
+            <MarkdownView value={t.AITestInstructions || "None"} />
           </div>
           <div className="instruction">
             <Tag value="Human" severity="secondary" />
-            <span>{t.HumanTestInstructions || "None"}</span>
+            <MarkdownView value={t.HumanTestInstructions || "None"} />
           </div>
         </Panel>
         {t.Dependencies?.length > 0 && (
@@ -931,6 +1025,7 @@ function TaskEditForm({
   close: () => void;
   refresh: () => void;
 }) {
+  const [saved, setSaved] = useState(false);
   const definitions = useQuery({
       queryKey: ["properties", task.ProjectID],
       queryFn: () =>
@@ -960,14 +1055,14 @@ function TaskEditForm({
         }),
       onSuccess: () => {
         refresh();
-        close();
+        setSaved(true);
       },
     }),
     allTasks = Object.values(board.data || {})
       .flat()
       .filter((t) => t.ID !== task.ID);
   return (
-    <Modal title="Edit task" close={close}>
+    <Modal title="Edit task" close={close} closing={saved}>
       <div className="form-grid">
         <label className="wide">
           Title
@@ -978,10 +1073,7 @@ function TaskEditForm({
         </label>
         <label className="wide">
           Description
-          <InputTextarea
-            value={form.Description}
-            onChange={(e) => setForm({ ...form, Description: e.target.value })}
-          />
+          <MarkdownField value={form.Description} onChange={(value) => setForm({ ...form, Description: value })} />
         </label>
         <label>
           Priority
@@ -1045,21 +1137,11 @@ function TaskEditForm({
         ))}
         <label className="wide">
           AI test instructions
-          <InputTextarea
-            value={form.AITestInstructions}
-            onChange={(e) =>
-              setForm({ ...form, AITestInstructions: e.target.value })
-            }
-          />
+          <MarkdownField value={form.AITestInstructions} onChange={(value) => setForm({ ...form, AITestInstructions: value })} />
         </label>
         <label className="wide">
           Human test instructions
-          <InputTextarea
-            value={form.HumanTestInstructions}
-            onChange={(e) =>
-              setForm({ ...form, HumanTestInstructions: e.target.value })
-            }
-          />
+          <MarkdownField value={form.HumanTestInstructions} onChange={(value) => setForm({ ...form, HumanTestInstructions: value })} />
         </label>
       </div>
       {save.error && <Message severity="error" text={save.error.message} className="action-error" />}
@@ -1089,6 +1171,7 @@ function Tabs({
         label: `${x} · ${x === "History" ? details.History?.length || 0 : x === "Testing" ? details.TestRuns?.length || 0 : x === "Artifacts" ? details.Artifacts?.length || 0 : details.Usage?.length || 0}`,
         command: () => setTab(x),
       }))} activeIndex={tabs.indexOf(tab)} />
+      <div className="detail-tab-content" key={tab}>
       {tab === "History" && (
         <>
           {details.History?.length ? <Timeline value={details.History} dataKey="ID" className="activity-timeline"
@@ -1132,7 +1215,8 @@ function Tabs({
           {!details.Artifacts?.length && <Message severity="info" text="No artifacts yet" />}
           {details.Artifacts?.map((a) => (
             <Card className="artifact" key={a.ID} title={a.Name} subTitle={`${a.Kind} · ${a.CreatorName || a.CreatedByType} · ${date(a.CreatedAt)}`}>
-              <p>{a.Path || a.URL}</p>
+              <div className="artifact-path" title={a.Path || a.URL}>{a.Path || a.URL}</div>
+              {a.Description && <MarkdownView value={a.Description} />}
               {a.Path && (
                 <Button label="Copy path" icon="pi pi-copy" text onClick={() => navigator.clipboard.writeText(a.Path!)} />
               )}
@@ -1166,6 +1250,7 @@ function Tabs({
           ))}
         </div>
       )}
+      </div>
     </section>
   );
 }
@@ -1274,6 +1359,7 @@ function PropertyForm({
   refresh: () => void;
 }) {
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [form, setForm] = useState({
       Name: property?.Name || "",
       Type: property?.Type || "text",
@@ -1290,7 +1376,7 @@ function PropertyForm({
         ),
       onSuccess: () => {
         refresh();
-        close();
+        setSaved(true);
       },
     }),
     remove = useMutation({
@@ -1298,11 +1384,11 @@ function PropertyForm({
         api(`/properties/${property!.ID}`, { method: "DELETE" }),
       onSuccess: () => {
         refresh();
-        close();
+        setSaved(true);
       },
     });
   return (
-    <Modal title={property ? "Edit property" : "Add property"} close={close}>
+    <Modal title={property ? "Edit property" : "Add property"} close={close} closing={saved}>
       <div className="form-grid">
         <label>
           Name
@@ -1396,6 +1482,7 @@ function WorkerForm({
   refresh: () => void;
 }) {
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [preset, setPreset] = useState(worker ? "Custom" : "Generic");
   const [form, setForm] = useState({
       Name: worker?.Name || "",
@@ -1415,18 +1502,18 @@ function WorkerForm({
         ),
       onSuccess: () => {
         refresh();
-        close();
+        setSaved(true);
       },
     }),
     archive = useMutation({
       mutationFn: () => api(`/workers/${worker!.ID}`, { method: "DELETE" }),
       onSuccess: () => {
         refresh();
-        close();
+        setSaved(true);
       },
     });
   return (
-    <Modal title={worker ? "Edit worker" : "Add worker"} close={close}>
+    <Modal title={worker ? "Edit worker" : "Add worker"} close={close} closing={saved}>
       <div className="form-grid">
         <label>
           Name
@@ -1444,10 +1531,7 @@ function WorkerForm({
         </label>
         <label className="wide">
           Description
-          <InputTextarea
-            value={form.Description}
-            onChange={(e) => setForm({ ...form, Description: e.target.value })}
-          />
+          <MarkdownField value={form.Description} onChange={(value) => setForm({ ...form, Description: value })} />
         </label>
         <label>
           Kind
@@ -1523,20 +1607,27 @@ function WorkerForm({
     </Modal>
   );
 }
+const ModalCloseContext = createContext<(() => void) | null>(null);
 function Modal({
   title,
   close,
   children,
+  closing = false,
 }: {
   title: string;
   close: () => void;
   children: React.ReactNode;
+  closing?: boolean;
 }) {
+  const [open, setOpen] = useState(true);
+  const visible = open && !closing;
   return (
-    <Dialog header={title} visible onHide={close} modal blockScroll draggable={false}
-      className="form-dialog" style={{ width: "min(760px, calc(100vw - 24px))" }}>
-      {children}
-    </Dialog>
+    <ModalCloseContext.Provider value={() => setOpen(false)}>
+      <Dialog header={title} visible={visible} onHide={() => setOpen(false)} transitionOptions={{ timeout: 250, onExited: close }} modal blockScroll draggable={false}
+        className="form-dialog" style={{ width: "min(760px, calc(100vw - 24px))" }}>
+        {children}
+      </Dialog>
+    </ModalCloseContext.Provider>
   );
 }
 function DialogActions({
@@ -1550,9 +1641,10 @@ function DialogActions({
   busy: boolean;
   disabled?: boolean;
 }) {
+  const animatedClose = useContext(ModalCloseContext) || close;
   return (
     <Toolbar className="dialog-actions" end={<>
-      <Button label="Cancel" text severity="secondary" onClick={close} />
+      <Button label="Cancel" text severity="secondary" onClick={animatedClose} />
       <Button className="primary" loading={busy} disabled={busy || disabled} onClick={save}>
         {busy ? "Saving…" : "Save"}
       </Button>

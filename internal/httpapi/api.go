@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/bogdanovandreycode/agentboard/internal/core"
@@ -31,6 +32,7 @@ func New(s *service.Service) http.Handler {
 			write(w, 200, v)
 		})
 		r.Post("/projects/{projectID}/tasks", a.createTask)
+		r.Post("/projects/{projectID}/tasks/import", a.importTasks)
 		r.Get("/tasks/{taskID}", a.getTask)
 		r.Patch("/tasks/{taskID}", a.updateTask)
 		r.Delete("/tasks/{taskID}", a.deleteTask)
@@ -127,6 +129,26 @@ func (a *API) createTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, 201, v)
+}
+func (a *API) importTasks(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 5<<20)
+	var doc service.ImportDocument
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&doc); err != nil {
+		write(w, http.StatusBadRequest, map[string]string{"error": "Invalid import JSON: " + err.Error()})
+		return
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		write(w, http.StatusBadRequest, map[string]string{"error": "Invalid import JSON: expected one document"})
+		return
+	}
+	count, err := a.Service.HumanImportTasks(r.Context(), chi.URLParam(r, "projectID"), doc)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	write(w, http.StatusCreated, map[string]int{"imported": count})
 }
 func (a *API) getTask(w http.ResponseWriter, r *http.Request) {
 	v, e := a.Service.HumanTask(r.Context(), chi.URLParam(r, "taskID"))
