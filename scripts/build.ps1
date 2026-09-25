@@ -21,14 +21,6 @@ try {
         Pop-Location
     }
 
-    # Vite uses emptyOutDir, therefore recreate the tracked placeholder
-    # after every production frontend build.
-    New-Item `
-        -ItemType File `
-        -Force `
-        ".\internal\webui\dist\.placeholder" |
-        Out-Null
-
     Write-Host ""
     Write-Host "==> Running Go tests"
 
@@ -45,6 +37,14 @@ try {
 
     if ($LASTEXITCODE -ne 0) {
         throw "Go build failed."
+    }
+
+    # The frontend is embedded at Go build time. Refresh the executable only
+    # after Vite has written internal/webui/dist.
+    go build -o ".\agentboard.exe" ./cmd/agentboard
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not build agentboard.exe. Stop a running AgentBoard server and retry."
     }
 
     Write-Host ""

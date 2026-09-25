@@ -24,6 +24,9 @@ var sessionCallsMigration string
 //go:embed migrations/003_session_activity.sql
 var sessionActivityMigration string
 
+//go:embed migrations/004_board_settings.sql
+var boardSettingsMigration string
+
 type Store struct{ DB *sql.DB }
 
 func DefaultDBPath() string {
@@ -90,6 +93,20 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	// Keep the schema change atomic when the HTTP and MCP processes open the
+	// same database at the same time.
+	tx, err = db.Begin()
+	if err != nil { db.Close(); return nil, err }
+	if _, err = tx.Exec("UPDATE schema_migrations SET version=version WHERE version=1"); err == nil {
+		var count int
+		err = tx.QueryRow("SELECT count(*) FROM schema_migrations WHERE version=4").Scan(&count)
+		if err == nil && count == 0 {
+			_, err = tx.Exec(boardSettingsMigration)
+			if err == nil { _, err = tx.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(4,?)", core.Now()) }
+		}
+	}
+	if err != nil { tx.Rollback(); db.Close(); return nil, fmt.Errorf("migrate v4: %w", err) }
+	if err = tx.Commit(); err != nil { db.Close(); return nil, err }
 	return &Store{DB: db}, nil
 }
 
@@ -158,6 +175,7 @@ func (s *Store) CreateWorker(ctx context.Context, projectID string, in core.Work
 	if in.Kind == "" {
 		in.Kind = "external"
 	}
+	if in.Harness == "" { in.Harness = "custom" }
 	if in.Capabilities == "" {
 		in.Capabilities = "{}"
 	}
@@ -165,14 +183,14 @@ func (s *Store) CreateWorker(ctx context.Context, projectID string, in core.Work
 		return core.Worker{}, core.ErrInvalidInput
 	}
 	now := core.Now()
-	w := core.Worker{ID: newID(), ProjectID: projectID, Name: in.Name, Slug: in.Slug, Description: in.Description, Kind: in.Kind, Capabilities: in.Capabilities, Enabled: in.Enabled, CreatedAt: now, UpdatedAt: now}
-	_, err := s.DB.ExecContext(ctx, `INSERT INTO workers(id,project_id,name,slug,description,kind,enabled,capabilities,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, w.ID, projectID, w.Name, w.Slug, w.Description, w.Kind, w.Enabled, w.Capabilities, now, now)
+	w := core.Worker{ID: newID(), ProjectID: projectID, Name: in.Name, Slug: in.Slug, Description: in.Description, Kind: in.Kind, Harness: in.Harness, Capabilities: in.Capabilities, Enabled: in.Enabled, CreatedAt: now, UpdatedAt: now}
+	_, err := s.DB.ExecContext(ctx, `INSERT INTO workers(id,project_id,name,slug,description,kind,enabled,capabilities,harness,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, w.ID, projectID, w.Name, w.Slug, w.Description, w.Kind, w.Enabled, w.Capabilities, w.Harness, now, now)
 	return w, err
 }
 
 func scanWorker(row interface{ Scan(...any) error }) (core.Worker, error) {
 	var w core.Worker
-	err := row.Scan(&w.ID, &w.ProjectID, &w.Name, &w.Slug, &w.Description, &w.Kind, &w.Enabled, &w.Archived, &w.Capabilities, &w.CreatedAt, &w.UpdatedAt, &w.AssignedTaskCount, &w.ActiveSessionCount, &w.SessionCount, &w.MCPCalls, &w.LastActivityAt)
+	err := row.Scan(&w.ID, &w.ProjectID, &w.Name, &w.Slug, &w.Description, &w.Kind, &w.Enabled, &w.Archived, &w.Capabilities, &w.CreatedAt, &w.UpdatedAt, &w.AssignedTaskCount, &w.ActiveSessionCount, &w.SessionCount, &w.MCPCalls, &w.LastActivityAt, &w.Harness)
 	return w, err
 }
 
@@ -180,7 +198,7 @@ const workerSelect = `SELECT w.id,w.project_id,w.name,w.slug,w.description,w.kin
 (SELECT count(*) FROM worker_sessions s WHERE s.worker_id=w.id AND s.ended_at IS NULL AND julianday(s.last_seen_at)>julianday('now','-90 seconds')),
 (SELECT count(*) FROM worker_sessions s WHERE s.worker_id=w.id),
 (SELECT COALESCE(sum(s.mcp_calls),0) FROM worker_sessions s WHERE s.worker_id=w.id),
-(SELECT max(s.last_activity_at) FROM worker_sessions s WHERE s.worker_id=w.id)
+(SELECT max(s.last_activity_at) FROM worker_sessions s WHERE s.worker_id=w.id),w.harness
 FROM workers w`
 
 func (s *Store) GetWorker(ctx context.Context, id string) (core.Worker, error) {
@@ -222,13 +240,14 @@ func (s *Store) UpdateWorker(ctx context.Context, id string, in core.WorkerInput
 	if in.Kind == "" {
 		in.Kind = "external"
 	}
+	if in.Harness == "" { in.Harness = "custom" }
 	if in.Capabilities == "" {
 		in.Capabilities = "{}"
 	}
 	if !json.Valid([]byte(in.Capabilities)) {
 		return core.Worker{}, core.ErrInvalidInput
 	}
-	_, err := s.DB.ExecContext(ctx, `UPDATE workers SET name=?,slug=?,description=?,kind=?,enabled=?,capabilities=?,updated_at=? WHERE id=?`, in.Name, in.Slug, in.Description, in.Kind, in.Enabled, in.Capabilities, core.Now(), id)
+	_, err := s.DB.ExecContext(ctx, `UPDATE workers SET name=?,slug=?,description=?,kind=?,enabled=?,capabilities=?,harness=?,updated_at=? WHERE id=?`, in.Name, in.Slug, in.Description, in.Kind, in.Enabled, in.Capabilities, in.Harness, core.Now(), id)
 	if err != nil {
 		return core.Worker{}, err
 	}
@@ -274,16 +293,16 @@ func (s *Store) CreateTask(ctx context.Context, projectID string, in core.TaskIn
 		in.Assignee.Type = "unassigned"
 	}
 	if in.Position == 0 {
-		_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(MAX(position),0)+1000 FROM tasks WHERE project_id=? AND state=?`, projectID, in.State).Scan(&in.Position)
+		_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(MAX(position),0)+1000 FROM tasks WHERE project_id=? AND state=? AND board_column=?`, projectID, in.State, in.BoardColumn).Scan(&in.Position)
 	}
 	now := core.Now()
-	t := core.Task{ID: newID(), ProjectID: projectID, Title: in.Title, Description: in.Description, State: in.State, Position: in.Position, Priority: in.Priority, AssigneeType: in.Assignee.Type, AssigneeWorkerID: in.Assignee.WorkerID, CreatedByType: "human", SourceTaskID: in.SourceTaskID, TestingMode: in.TestingMode, AITestInstructions: in.AITestInstructions, HumanTestInstructions: in.HumanTestInstructions, CreatedAt: now, UpdatedAt: now}
+	t := core.Task{ID: newID(), ProjectID: projectID, Title: in.Title, Description: in.Description, State: in.State, BoardColumn: in.BoardColumn, Position: in.Position, Priority: in.Priority, AssigneeType: in.Assignee.Type, AssigneeWorkerID: in.Assignee.WorkerID, CreatedByType: "human", SourceTaskID: in.SourceTaskID, TestingMode: in.TestingMode, AITestInstructions: in.AITestInstructions, HumanTestInstructions: in.HumanTestInstructions, CreatedAt: now, UpdatedAt: now}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return t, err
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `INSERT INTO tasks(id,project_id,title,description,state,position,priority,assignee_type,assignee_worker_id,created_by_type,source_task_id,testing_mode,ai_test_instructions,human_test_instructions,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, t.ID, projectID, t.Title, t.Description, t.State, t.Position, t.Priority, t.AssigneeType, t.AssigneeWorkerID, t.CreatedByType, t.SourceTaskID, t.TestingMode, t.AITestInstructions, t.HumanTestInstructions, now, now)
+	_, err = tx.ExecContext(ctx, `INSERT INTO tasks(id,project_id,title,description,state,board_column,position,priority,assignee_type,assignee_worker_id,created_by_type,source_task_id,testing_mode,ai_test_instructions,human_test_instructions,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, t.ID, projectID, t.Title, t.Description, t.State, t.BoardColumn, t.Position, t.Priority, t.AssigneeType, t.AssigneeWorkerID, t.CreatedByType, t.SourceTaskID, t.TestingMode, t.AITestInstructions, t.HumanTestInstructions, now, now)
 	if err != nil {
 		return t, err
 	}
@@ -311,11 +330,11 @@ func (s *Store) CreateTask(ctx context.Context, projectID string, in core.TaskIn
 	return s.GetTask(ctx, t.ID)
 }
 
-const taskSelect = `SELECT t.id,t.project_id,t.title,t.description,t.state,t.position,t.priority,t.assignee_type,t.assignee_worker_id,t.created_by_type,t.created_by_worker_id,t.created_by_session_id,t.source_task_id,t.testing_mode,t.ai_test_instructions,t.human_test_instructions,t.created_at,t.updated_at,COALESCE(aw.name,''),COALESCE(cw.name,'') FROM tasks t LEFT JOIN workers aw ON aw.id=t.assignee_worker_id LEFT JOIN workers cw ON cw.id=t.created_by_worker_id`
+const taskSelect = `SELECT t.id,t.project_id,t.title,t.description,t.state,t.position,t.priority,t.assignee_type,t.assignee_worker_id,t.created_by_type,t.created_by_worker_id,t.created_by_session_id,t.source_task_id,t.testing_mode,t.ai_test_instructions,t.human_test_instructions,t.created_at,t.updated_at,COALESCE(aw.name,''),COALESCE(cw.name,''),t.board_column FROM tasks t LEFT JOIN workers aw ON aw.id=t.assignee_worker_id LEFT JOIN workers cw ON cw.id=t.created_by_worker_id`
 
 func scanTask(row interface{ Scan(...any) error }) (core.Task, error) {
 	var t core.Task
-	err := row.Scan(&t.ID, &t.ProjectID, &t.Title, &t.Description, &t.State, &t.Position, &t.Priority, &t.AssigneeType, &t.AssigneeWorkerID, &t.CreatedByType, &t.CreatedByWorkerID, &t.CreatedBySessionID, &t.SourceTaskID, &t.TestingMode, &t.AITestInstructions, &t.HumanTestInstructions, &t.CreatedAt, &t.UpdatedAt, &t.AssigneeName, &t.CreatorName)
+	err := row.Scan(&t.ID, &t.ProjectID, &t.Title, &t.Description, &t.State, &t.Position, &t.Priority, &t.AssigneeType, &t.AssigneeWorkerID, &t.CreatedByType, &t.CreatedByWorkerID, &t.CreatedBySessionID, &t.SourceTaskID, &t.TestingMode, &t.AITestInstructions, &t.HumanTestInstructions, &t.CreatedAt, &t.UpdatedAt, &t.AssigneeName, &t.CreatorName, &t.BoardColumn)
 	return t, err
 }
 func (s *Store) GetTask(ctx context.Context, id string) (core.Task, error) {

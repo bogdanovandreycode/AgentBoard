@@ -1,14 +1,19 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"time"
 
 	"github.com/bogdanovandreycode/agentboard/internal/core"
 	"github.com/bogdanovandreycode/agentboard/internal/service"
 	"github.com/go-chi/chi/v5"
+	"github.com/bogdanovandreycode/agentboard/internal/mcpserver"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type API struct{ Service *service.Service }
@@ -23,6 +28,8 @@ func New(s *service.Service) http.Handler {
 		r.Get("/projects", a.listProjects)
 		r.Post("/projects", a.createProject)
 		r.Get("/projects/{projectID}/board", a.board)
+		r.Get("/projects/{projectID}/settings", a.getSettings)
+		r.Put("/projects/{projectID}/settings", a.putSettings)
 		r.Get("/projects/{projectID}/git", func(w http.ResponseWriter, r *http.Request) {
 			v, e := a.Service.ProjectGitInfo(r.Context(), chi.URLParam(r, "projectID"))
 			if e != nil {
@@ -56,6 +63,7 @@ func New(s *service.Service) http.Handler {
 			}
 			write(w, http.StatusOK, v)
 		})
+		r.Get("/workers/{workerID}/mcp/check", a.checkWorkerMCP)
 		r.Patch("/workers/{workerID}", a.updateWorker)
 		r.Delete("/workers/{workerID}", a.deleteWorker)
 		r.Get("/projects/{projectID}/properties", a.properties)
@@ -269,6 +277,18 @@ func (a *API) usage(w http.ResponseWriter, r *http.Request) {
 	}
 	write(w, 200, v)
 }
+func (a *API) getSettings(w http.ResponseWriter, r *http.Request) {
+	v, err := a.Service.GetProjectSettings(r.Context(), chi.URLParam(r, "projectID"))
+	if err != nil { writeError(w, err); return }
+	write(w, http.StatusOK, v)
+}
+func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
+	var in service.ProjectSettings
+	if !decode(w, r, &in) { return }
+	v, err := a.Service.UpdateProjectSettings(r.Context(), chi.URLParam(r, "projectID"), in)
+	if err != nil { writeError(w, err); return }
+	write(w, http.StatusOK, v)
+}
 func (a *API) workers(w http.ResponseWriter, r *http.Request) {
 	v, e := a.Service.Store.ListWorkers(r.Context(), chi.URLParam(r, "projectID"), false)
 	if e != nil {
@@ -296,6 +316,32 @@ func (a *API) worker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	write(w, 200, v)
+}
+func (a *API) checkWorkerMCP(w http.ResponseWriter, r *http.Request) {
+	worker, err := a.Service.Store.GetWorker(r.Context(), chi.URLParam(r, "workerID"))
+	if err != nil { writeError(w, err); return }
+	project, err := a.Service.Store.GetProject(r.Context(), worker.ProjectID)
+	if err != nil { writeError(w, err); return }
+	executable, err := os.Executable()
+	if err != nil { writeError(w, err); return }
+	result := map[string]any{"executable": executable, "projectPath": project.Path, "workerSlug": worker.Slug, "enabled": worker.Enabled && !worker.Archived, "clientConnected": worker.ActiveSessionCount > 0, "toolCount": 0, "serverOK": false}
+	if !worker.Enabled || worker.Archived { write(w, http.StatusOK, result); return }
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	server := mcpserver.New(a.Service, core.AgentContext{Project: project, Worker: worker}, "check")
+	serverSession, err := server.MCP.Connect(ctx, serverTransport, nil)
+	if err != nil { result["error"] = err.Error(); write(w, http.StatusOK, result); return }
+	defer serverSession.Close()
+	client := mcp.NewClient(&mcp.Implementation{Name: "agentboard-check", Version: "1"}, nil)
+	clientSession, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil { result["error"] = err.Error(); write(w, http.StatusOK, result); return }
+	defer clientSession.Close()
+	tools, err := clientSession.ListTools(ctx, nil)
+	if err != nil { result["error"] = err.Error(); write(w, http.StatusOK, result); return }
+	result["toolCount"] = len(tools.Tools)
+	result["serverOK"] = len(tools.Tools) > 0
+	write(w, http.StatusOK, result)
 }
 func (a *API) updateWorker(w http.ResponseWriter, r *http.Request) {
 	var in core.WorkerInput

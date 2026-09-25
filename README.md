@@ -1,143 +1,52 @@
 # AgentBoard
 
-AgentBoard is a local-first task control plane designed for collaboration between a human project owner and AI agents.
+AgentBoard — локальная доска задач, на которой человек и AI-воркеры работают с общими задачами, но имеют разные права. Приложение запускается одним файлом `agentboard.exe`, открывает веб-интерфейс в браузере и предоставляет воркерам отдельный MCP-сервер по `stdio`. Данные остаются на вашем компьютере.
 
-## Core idea
+**[Начать с нуля](doc/START_HERE.md) · [Работа с задачами](doc/TASKS.md) · [Подключение AI через MCP](doc/WORKERS_MCP.md) · [Импорт JSON](doc/IMPORT.md) · [Настройки](doc/SETTINGS.md) · [Решение проблем](doc/TROUBLESHOOTING.md)**
 
-Human and AI work with the same tasks and shared task history, but have different workflow capabilities.
+## За пять минут
 
-Task workflow:
+1. Установите AgentBoard через Scoop после публикации первого релиза (инструкция ниже) или скачайте ZIP из [Releases](https://github.com/bogdanovandreycode/AgentBoard/releases) и распакуйте его.
+2. Откройте PowerShell в папке вашего проекта, например `C:\Projects\MyApp`.
+3. Выполните `agentboard init` (для ZIP: полный путь к `agentboard.exe` и `init`).
+4. Выполните `agentboard open`. Откроется `http://127.0.0.1:7337`.
+5. Добавьте задачу кнопкой **New task**. Для AI-сотрудника откройте **Workers → Add worker**, выберите профиль клиента и скопируйте MCP-конфигурацию.
 
-backlog -> features -> in_progress -> testing -> verification -> complete
+Если у вас ещё нет папки проекта, создайте её в Проводнике Windows. Проектом может быть любая папка, даже без Git и кода.
 
-AI can only move forward through:
+## Установка через Scoop
 
-features -> in_progress -> testing -> verification
-
-Final acceptance belongs to the human project owner.
-
-## Features planned for MVP
-
-- Persistent local projects
-- Kanban task board
-- Shared Human / AI / System task history
-- Strict AI workflow capabilities
-- Human-only final acceptance
-- AI / Human / Hybrid testing modes
-- Structured test results
-- MCP integration
-- Human HTTP API
-- AI usage telemetry
-- Custom task properties
-- Task dependencies
-- Git metadata integration
-- Embedded React Web UI
-
-## Stack
-
-Backend:
-- Go
-- SQLite
-- database/sql
-- chi
-- official Model Context Protocol Go SDK
-
-Frontend:
-- React
-- TypeScript
-- Vite
-- TanStack Query
-- dnd-kit
-- Tailwind CSS
-
-## Architecture
-
-AgentBoard Core owns:
-- workflow rules;
-- persistence;
-- permissions;
-- history;
-- testing rules;
-- telemetry.
-
-Adapters:
-- HTTP API for Human interaction;
-- MCP for AI interaction;
-- CLI for local administration.
-
-SQLite is stored outside managed workspaces.
-
-Managed projects contain only lightweight AgentBoard project metadata.
-
-## Quick start
+В PowerShell с уже установленным [Scoop](https://scoop.sh/) после выхода релиза:
 
 ```powershell
-go build -o agentboard.exe ./cmd/agentboard
-./agentboard.exe init
-./agentboard.exe open
-```
-
-The UI opens at `http://127.0.0.1:7337`. Create one or more Workers, assign tasks, and launch an external agent with a Worker-scoped MCP server:
-
-```powershell
-./agentboard.exe mcp --project C:\path\to\project --worker codex
-```
-
-Other commands:
-
-```text
-agentboard open [--addr 127.0.0.1:7337] [project-path]
-agentboard serve [--addr 127.0.0.1:7337]
+scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/download/agentboard.json
 agentboard version
 ```
 
-Operational data is stored in the user's configuration directory, outside managed projects. `agentboard init` writes only `.agentboard/project.json` in the project and is safe to run repeatedly. Workers are logical identities; AgentBoard never launches AI processes automatically.
+Первого GitHub Release пока нет: до его публикации эта команда не сработает. Для разработчиков есть [сборка из исходников](doc/INSTALL.md). Release workflow создаёт ZIP и Scoop manifest с SHA-256 из одного и того же артефакта. Обновление установленной версии: `scoop update agentboard` после добавления manifest в bucket; подробности — [подготовка релиза](doc/SCOOP_RELEASE.md).
 
-## Status
+## Как устроена доска
 
-Local AgentBoard MVP.
+`Backlog → Features → In progress → Testing → Verification → Complete`
 
-## Project launcher and live updates
+Человек может перемещать задачи по доске. AI может двигаться только `Features → In progress → Testing → Verification`; финальное принятие в `Complete` выполняет человек. Пользовательские колонки предназначены для человека: задача в них остаётся в состоянии `Backlog` для MCP. Режимы тестирования: AI, Human и Hybrid. История, тесты, артефакты и затраты AI прикреплены к задаче.
 
-`agentboard open` finds `.agentboard/project.json` in the current directory or its
-parents and opens `/?project=<id>`. `agentboard open .` and an explicit directory
-work too. Outside a registered project, the browser opens a project chooser.
-Invalid markers are reported; an unknown project ID in the URL shows the chooser
-with an explanation. Browser Back/Forward and the project selector update the URL.
-An already running AgentBoard server is reused. CLI flags go before the directory.
+## Команды
 
-The visible board and open task (including history, tests, artifacts and usage)
-refresh every second. Workers refresh every 4 seconds and projects every 10 seconds.
-Polling pauses in background tabs and resumes on focus; unsaved form input is kept.
+```text
+agentboard init [--db PATH] [project-path]
+agentboard open [--addr 127.0.0.1:7337] [--db PATH] [project-path]
+agentboard serve [--addr 127.0.0.1:7337] [--db PATH]
+agentboard mcp --project PROJECT_PATH --worker WORKER_SLUG [--db PATH]
+agentboard version
+```
 
-Worker forms provide Generic, Coding, Graphics and Reviewer capability presets,
-with editable JSON for custom capabilities. Capabilities describe the worker;
-they do not grant workflow permissions.
+`init` регистрирует папку и записывает туда только `.agentboard/project.json`. Рабочие данные SQLite находятся в каталоге конфигурации пользователя Windows (`%AppData%\AgentBoard\agentboard.db`), вне проекта и вне установки Scoop. Удаление или обновление пакета не должно удалять эти данные. Перед переносом на другой компьютер сделайте копию базы при остановленном AgentBoard.
 
-## MCP discovery and diagnostics
+Воркеры — логические учётные записи; AgentBoard сам не запускает Codex, Claude или другой AI-клиент. Клиент запускает локальный MCP-процесс для конкретного воркера. MCP является границей прав приложения, а для изоляции файлов используйте песочницу AI-клиента.
 
-The MCP initialize response includes worker instructions. The read-only resource
-`agentboard://current-worker` identifies the configured worker and project and
-points clients to `get_my_board`. All 11 worker tools and existing permissions
-remain available. Resources are discovery metadata, not a substitute for tools.
+## Для разработчиков
 
-Workers show active/offline status, total session and MCP-call counts, and the last
-MCP call time. Open a worker to inspect its latest 50 sessions or copy its Codex
-TOML configuration (requires `agentboard` on PATH). The human REST API adds
-`GET /api/workers/{workerID}/sessions`; worker responses add `ActiveSessionCount`,
-`SessionCount`, `MCPCalls`, and nullable `LastActivityAt`. Sessions include nullable
-`LastActivityAt` and `LastSeenAt`, plus `MCPCalls`. `GET /api/health` identifies the server.
+Стек: Go, SQLite, официальный MCP Go SDK, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Сначала собирайте frontend, затем Go: `./scripts/build.ps1`. Веб-файлы включаются в бинарник через `go:embed`. Архитектура и API описаны в [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).
 
-MCP processes send a heartbeat every 15 seconds. Sessions without a heartbeat for
-90 seconds are offline, including processes that crashed without setting `EndedAt`.
-Last MCP activity measures tool calls, not heartbeats or resource discovery.
-Pre-upgrade sessions have unknown activity timestamps and are not marked active
-until a new process sends heartbeats. Migration 3 preserves all existing data.
-
-Never read or modify AgentBoard SQLite storage directly for worker tasks: MCP is
-the supported worker interface. This is a workflow/capability boundary, not an OS
-security boundary. Filesystem isolation requires running the worker in a sandbox.
-
-For self-dogfooding, initialize this repository, register a worker through the UI,
-and use MCP to create/advance its assigned features, record tests and add history.
-Final acceptance in Complete remains human-owned.
+Documentation in Russian is under [`doc/`](doc/START_HERE.md). The app is local-first, ships as one Windows executable, and exposes a worker-scoped stdio MCP server. English UI is available in Settings.

@@ -194,8 +194,8 @@ body { min-width: 320px; }
 .board-scroller { width: 100%; overflow-x: auto; overflow-y: visible; padding-bottom: 8px; scrollbar-gutter: stable; }
 .board { overflow: visible; width: 100%; animation: board-mode-enter .3s ease both; }
 @keyframes board-mode-enter { from { opacity: .45; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.board.board--fit { grid-template-columns: repeat(6, minmax(0, 1fr)); min-width: 1080px; }
-.board.board--wide { grid-template-columns: repeat(6, 360px); width: 2230px; }
+.board.board--fit { grid-template-columns: repeat(var(--board-columns, 6), minmax(0, 1fr)); min-width: calc(var(--board-columns, 6) * 180px); }
+.board.board--wide { grid-template-columns: repeat(var(--board-columns, 6), 360px); width: max-content; }
 .board-mode { display: flex; justify-content: flex-end; gap: 3px; margin: -2px 0 12px; }
 .board-mode button { border: 1px solid var(--line); color: #aeb9ca; background: #171e2d; padding: 8px 13px; cursor: pointer; transition: background .2s, color .2s, transform .2s; }
 .board-mode button:first-child { border-radius: 8px 0 0 8px; }

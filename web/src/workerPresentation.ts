@@ -42,9 +42,11 @@ export function relativeTime(value: string) {
     0,
     Math.floor((Date.now() - Date.parse(value)) / 1000),
   );
-  if (!Number.isFinite(seconds)) return "unknown";
-  if (seconds < 60) return `${seconds}s ago`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
+  if (!Number.isFinite(seconds)) return "—";
+  const locale = document.documentElement.lang || "en";
+  const format = new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "short" });
+  if (seconds < 60) return format.format(-seconds, "second");
+  if (seconds < 3600) return format.format(-Math.floor(seconds / 60), "minute");
+  if (seconds < 86400) return format.format(-Math.floor(seconds / 3600), "hour");
+  return format.format(-Math.floor(seconds / 86400), "day");
 }

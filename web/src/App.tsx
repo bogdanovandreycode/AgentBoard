@@ -46,9 +46,15 @@ import { WorkerDiagnostics } from "./WorkerDiagnostics";
 import { SelectField } from "./SelectField";
 import { MarkdownField, MarkdownView } from "./MarkdownField";
 import { capabilityPresets, relativeTime } from "./workerPresentation";
+import { SettingsPage } from "./SettingsPage";
+import { builtInColumns, formatDate, type ProjectSettings } from "./settings";
+import { setLanguage, t, t as translate } from "./i18n";
+import { harnessPresets, mcpConfiguration, presetCapabilities } from "./workerPresets";
+import lightThemeURL from "primereact/resources/themes/lara-light-indigo/theme.css?url";
 import "./App.css";
 import "./Properties.css";
 import "./PrimeLayout.css";
+import "./Themes.css";
 
 type Project = { ID: string; Name: string; Path: string };
 type Worker = {
@@ -57,6 +63,7 @@ type Worker = {
   Slug: string;
   Description: string;
   Kind: string;
+  Harness: string;
   Capabilities: string;
   Enabled: boolean;
   Archived: boolean;
@@ -122,6 +129,7 @@ type Dependency = {
   DependsOnTaskID: string;
   Title: string;
   State: string;
+  BoardColumn: string;
   Artifacts: Artifact[];
 };
 type Task = {
@@ -130,6 +138,7 @@ type Task = {
   Title: string;
   Description: string;
   State: string;
+  BoardColumn: string;
   Position: number;
   Priority: string;
   AssigneeType: string;
@@ -154,14 +163,6 @@ type Details = Task & {
   Properties: { PropertyDefinitionID: string; Name: string; Value: string }[];
 };
 type Board = Record<string, Task[]>;
-const states = [
-  ["backlog", "Backlog"],
-  ["features", "Features"],
-  ["in_progress", "In progress"],
-  ["testing", "Testing"],
-  ["verification", "Verification"],
-  ["complete", "Complete"],
-] as const;
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
   const r = await fetch("/api" + url, {
     headers: { "Content-Type": "application/json" },
@@ -174,7 +175,11 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
   return r.status === 204 ? (undefined as T) : r.json();
 }
 const short = (id: string) => id.slice(0, 8).toUpperCase();
-const date = (v: string) => new Date(v).toLocaleString();
+const DateContext = createContext({ timezone: "local", language: "system" });
+function useDateFormat() {
+  const { timezone, language } = useContext(DateContext);
+  return (value: string) => formatDate(value, timezone, language);
+}
 
 function App() {
   const [, tick] = useState(0);
@@ -183,7 +188,7 @@ function App() {
     return () => window.clearInterval(timer);
   }, []);
   const qc = useQueryClient(),
-    [tab, setTab] = useState<"board" | "workers" | "properties" | "import">("board"),
+    [tab, setTab] = useState<"board" | "workers" | "properties" | "import" | "settings">("board"),
     [projectID, setProjectID] = useState(
       () => new URLSearchParams(location.search).get("project") || "",
     ),
@@ -205,16 +210,38 @@ function App() {
       refetchInterval: 10000,
     }),
     active = projects.data?.some((p) => p.ID === projectID) ? projectID : "";
+  const settings = useQuery({
+    queryKey: ["settings", active],
+    queryFn: () => api<ProjectSettings>(`/projects/${active}/settings`),
+    enabled: !!active,
+  });
+  useEffect(() => {
+    const theme = settings.data?.theme || "dark";
+    document.documentElement.dataset.theme = theme;
+    setLanguage(settings.data?.language || "system");
+    let link = document.getElementById("agentboard-light-theme") as HTMLLinkElement | null;
+    if (theme === "light" || theme === "windows") {
+      if (!link) { link = document.createElement("link"); link.id = "agentboard-light-theme"; link.rel = "stylesheet"; document.head.appendChild(link); }
+      link.href = lightThemeURL;
+    } else { link?.remove(); }
+  }, [settings.data?.theme, settings.data?.language]);
+  const saveSettings = useMutation({
+    mutationFn: (value: ProjectSettings) => api<ProjectSettings>(`/projects/${active}/settings`, { method: "PUT", body: JSON.stringify(value) }),
+    onSuccess: (value) => {
+      qc.setQueryData(["settings", active], value);
+      qc.invalidateQueries({ queryKey: ["board", active] });
+    },
+  });
   const workers = useQuery({
       queryKey: ["workers", active],
       queryFn: () => api<Worker[]>(`/projects/${active}/workers`),
-      refetchInterval: 4000,
+      refetchInterval: (settings.data?.workerRefreshSeconds || 4) * 1000,
       enabled: !!active,
     }),
     board = useQuery({
       queryKey: ["board", active],
       queryFn: () => api<Board>(`/projects/${active}/board`),
-      refetchInterval: 1000,
+      refetchInterval: (settings.data?.boardRefreshSeconds || 1) * 1000,
       enabled: !!active,
     });
   const refresh = () => {
@@ -256,16 +283,17 @@ function App() {
   };
   const onDragStart = ({ active: drag }: DragStartEvent) => setDraggedID(String(drag.id));
   const allTasks = Object.values(board.data || {}).flat();
+  const columns = settings.data?.columns || builtInColumns;
   const draggedTask = allTasks.find((task) => task.ID === draggedID);
   const changeBoardMode = (mode: "fit" | "wide") => {
     setBoardMode(mode);
     localStorage.setItem("agentboard-board-mode", mode);
   };
-  if (projects.isLoading) return <Empty title="Loading AgentBoard…" />;
+  if (projects.isLoading) return <Empty title={t("Loading AgentBoard…")} />;
   if (projects.error)
     return (
       <Empty
-        title="Could not load projects"
+        title={t("Could not load projects")}
         subtitle={projects.error.message}
       />
     );
@@ -273,18 +301,19 @@ function App() {
     return (
       <main className="project-launcher">
         <h1>AgentBoard</h1>
-        <h2>Projects</h2>
-        {projectID && <Message severity="warn" text="The requested project is not registered on this server. Select a project below." />}
-        {!projects.data?.length && <Message severity="info" text={<>Run <code>agentboard init</code> in a project folder. This list updates automatically.</>} />}
+        <h2>{t("Projects")}</h2>
+        {projectID && <Message severity="warn" text={t("The requested project is not registered on this server. Select a project below.")} />}
+        {!projects.data?.length && <Message severity="info" text={<>{t("Run")} <code>agentboard init</code> {t("in a project folder. This list updates automatically.")}</>} />}
         {projects.data?.map((p) => (
           <Card className="project-tile" key={p.ID} title={p.Name} subTitle={p.Path}>
-            <Button label="Open project" icon="pi pi-arrow-right" iconPos="right" text
+            <Button label={t("Open project")} icon="pi pi-arrow-right" iconPos="right" text
               onClick={() => selectProject(p.ID)} />
           </Card>
         ))}
       </main>
     );
   return (
+    <DateContext.Provider value={{ timezone: settings.data?.timezone || "local", language: settings.data?.language || "system" }}>
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
@@ -293,7 +322,7 @@ function App() {
           </span>
           <span>AgentBoard</span>
         </div>
-        <div className="workspace-label">Workspace</div>
+        <div className="workspace-label">{t("Workspace")}</div>
         <SelectField
           className="project-select"
           value={active}
@@ -305,37 +334,40 @@ function App() {
             </option>
           ))}
         </SelectField>
-        <Button onClick={() => selectProject("")}>All projects</Button>
+        <Button onClick={() => selectProject("")}>{t("All projects")}</Button>
         <nav>
           <Button
             className={tab === "board" ? "active" : ""}
             onClick={() => setTab("board")}
           >
             <Columns3 />
-            Board
+            {t("Board")}
           </Button>
           <Button
             className={tab === "workers" ? "active" : ""}
             onClick={() => setTab("workers")}
           >
             <Users />
-            Workers
+            {t("Workers")}
           </Button>
           <Button
             className={tab === "properties" ? "active" : ""}
             onClick={() => setTab("properties")}
           >
             <Settings2 />
-            Properties
+            {t("Properties")}
           </Button>
           <Button className={tab === "import" ? "active" : ""} onClick={() => setTab("import")}>
             <Upload />
-            Import tasks
+            {t("Import tasks")}
+          </Button>
+          <Button className={tab === "settings" ? "active" : ""} onClick={() => setTab("settings")}>
+            <Settings2 />{t("Settings")}
           </Button>
         </nav>
         <div className="sidebar-note">
           <Bot size={16} />
-          <span>Workers run only when you launch them through MCP.</span>
+          <span>{t("Workers run only when you launch them through MCP.")}</span>
         </div>
       </aside>
       <main>
@@ -346,16 +378,16 @@ function App() {
             </p>
             <h1>
               {tab === "board"
-                ? "Project board"
+                ? t("Project board")
                 : tab === "workers"
-                  ? "Workers"
-                  : tab === "properties" ? "Custom properties" : "Import tasks"}
+                  ? t("Workers")
+                  : tab === "properties" ? t("Properties") : tab === "settings" ? t("Settings") : t("Import tasks")}
             </h1>
           </div>
           {tab === "board" && (
             <Button className="primary" onClick={() => setCreate(true)}>
               <Plus size={17} />
-              New task
+              {t("New task")}
             </Button>
           )}
         </header>
@@ -367,17 +399,17 @@ function App() {
               workers={workers.data || []}
               openSearch={() => setSearchOpen(true)}
             />
-            <div className="board-mode" role="group" aria-label="Board layout">
-              <button className={boardMode === "fit" ? "active" : ""} onClick={() => changeBoardMode("fit")}>Fit all columns</button>
-              <button className={boardMode === "wide" ? "active" : ""} onClick={() => changeBoardMode("wide")}>Wide columns</button>
+            <div className="board-mode" role="group" aria-label={t("Board layout")}>
+              <button className={boardMode === "fit" ? "active" : ""} onClick={() => changeBoardMode("fit")}>{t("Fit all columns")}</button>
+              <button className={boardMode === "wide" ? "active" : ""} onClick={() => changeBoardMode("wide")}>{t("Wide columns")}</button>
             </div>
             <DndContext onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDraggedID(undefined)}>
-              <div className="board-scroller"><div key={boardMode} className={`board board--${boardMode}`}>
-                {states.map(([key, label]) => (
+              <div className="board-scroller"><div key={boardMode} className={`board board--${boardMode}`} style={{ "--board-columns": columns.length } as React.CSSProperties}>
+                {columns.map(({ id: key, name: label }) => (
                   <Column
                     key={key}
                     state={key}
-                    label={label}
+                    label={t(label)}
                     tasks={(board.data?.[key] || []).filter((t) =>
                       matches(t, filters),
                     )}
@@ -401,6 +433,8 @@ function App() {
           />
         ) : tab === "properties" ? (
           <Properties projectID={active} />
+        ) : tab === "settings" ? (
+          settings.data ? <SettingsPage value={settings.data} projectPath={projects.data?.find((p) => p.ID === active)?.Path || ""} onSave={(value) => saveSettings.mutate(value)} saving={saveSettings.isPending} error={saveSettings.error?.message} /> : <ProgressSpinner />
         ) : (
           <ImportTasks projectID={active} workers={workers.data || []} workersLoading={workers.isLoading} refresh={refresh} />
         )}
@@ -408,6 +442,7 @@ function App() {
       {selected && (
         <TaskDrawer
           id={selected}
+          pollMs={(settings.data?.boardRefreshSeconds || 1) * 1000}
           workers={workers.data || []}
           close={() => setSelected(undefined)}
           refresh={refresh}
@@ -416,6 +451,7 @@ function App() {
       {create && (
         <TaskForm
           projectID={active}
+          columns={columns}
           workers={workers.data || []}
           close={() => setCreate(false)}
           refresh={refresh}
@@ -423,6 +459,7 @@ function App() {
       )}
       {searchOpen && <SearchTasks tasks={allTasks} onOpen={(id) => { setSearchOpen(false); setSelected(id); }} close={() => setSearchOpen(false)} />}
     </div>
+    </DateContext.Provider>
   );
 }
 function FilterBar({
@@ -447,13 +484,13 @@ function FilterBar({
   return (
     <Toolbar className="filters" start={<span>
         <Filter size={15} />
-        Filters
+        {t("Filters")}
       </span>} end={<div className="filter-controls">{field(
         "responsible",
         <>
-          <option value="all">All responsible</option>
-          <option value="human">Human</option>
-          <option value="unassigned">Unassigned</option>
+          <option value="all">{t("All responsible")}</option>
+          <option value="human">{t("Human")}</option>
+          <option value="unassigned">{t("Unassigned")}</option>
           {workers.map((w) => (
             <option key={w.ID} value={w.ID}>
               {w.Name}
@@ -464,31 +501,31 @@ function FilterBar({
       {field(
         "priority",
         <>
-          <option value="all">All priority</option>
-          <option>critical</option>
-          <option>high</option>
-          <option>medium</option>
-          <option>low</option>
+          <option value="all">{t("All priority")}</option>
+          <option value="critical">{t("critical")}</option>
+          <option value="high">{t("high")}</option>
+          <option value="medium">{t("medium")}</option>
+          <option value="low">{t("low")}</option>
         </>,
       )}
       {field(
         "origin",
         <>
-          <option value="all">All origins</option>
-          <option value="human">Human-created</option>
-          <option value="agent">AI-created</option>
+          <option value="all">{t("All origins")}</option>
+          <option value="human">{t("Human-created")}</option>
+          <option value="agent">{t("AI-created")}</option>
         </>,
       )}
       {field(
         "testing",
         <>
-          <option value="all">All testing</option>
+          <option value="all">{t("All testing")}</option>
           <option value="ai">AI</option>
-          <option value="human">Human</option>
-          <option value="hybrid">Hybrid</option>
+          <option value="human">{t("Human")}</option>
+          <option value="hybrid">{t("Hybrid")}</option>
         </>,
       )}
-      <div className="filter-search"><Search size={15} /><InputText aria-label="Search tasks" placeholder="Search tasks…" value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} /><Button label="Expand" aria-label="Open task search" icon="pi pi-external-link" text onClick={openSearch} /></div>
+      <div className="filter-search"><Search size={15} /><InputText aria-label={t("Search tasks")} placeholder={t("Search tasks…")} value={filters.search} onChange={(e) => setFilters({ ...filters, search: e.target.value })} /><Button label={t("Expand")} aria-label={t("Open task search")} icon="pi pi-external-link" text onClick={openSearch} /></div>
       </div>} />
   );
 }
@@ -508,13 +545,13 @@ function SearchTasks({ tasks, onOpen, close }: { tasks: Task[]; onOpen: (id: str
   const [visible, setVisible] = useState(true);
   const [pendingID, setPendingID] = useState<string>();
   const results = tasks.filter((task) => `${task.ID} ${task.Title} ${task.Description} ${task.AssigneeName}`.toLocaleLowerCase().includes(query.toLocaleLowerCase().trim()));
-  return <Dialog header="Search tasks" visible={visible} onHide={() => setVisible(false)} transitionOptions={{ timeout: 250, onExited: () => pendingID ? onOpen(pendingID) : close() }} modal blockScroll draggable={false} className="search-dialog" style={{ width: "90vw", height: "90vh" }}>
+  return <Dialog header={t("Search tasks")} visible={visible} onHide={() => setVisible(false)} transitionOptions={{ timeout: 250, onExited: () => pendingID ? onOpen(pendingID) : close() }} modal blockScroll draggable={false} className="search-dialog" style={{ width: "90vw", height: "90vh" }}>
     <div className="search-dialog-body">
-      <div className="search-dialog-input"><Search size={19} /><InputText autoFocus placeholder="Search by title, description, ID or worker" aria-label="Search all tasks" value={query} onChange={(e) => setQuery(e.target.value)} /></div>
-      <p>{results.length} {results.length === 1 ? "task" : "tasks"}</p>
+      <div className="search-dialog-input"><Search size={19} /><InputText autoFocus placeholder={t("Search by title, description, ID or worker")} aria-label={t("Search all tasks")} value={query} onChange={(e) => setQuery(e.target.value)} /></div>
+      <p>{results.length} {t(results.length === 1 ? "task" : "tasks")}</p>
       <div className="search-results">{results.map((task) => <button key={task.ID} onClick={() => { setPendingID(task.ID); setVisible(false); }}>
-        <span className="task-key">{short(task.ID)} · {task.State.replaceAll("_", " ")}</span><strong>{task.Title}</strong><span>{task.Description || "No description"}</span>
-      </button>)}{!results.length && <Message severity="info" text="No matching tasks" />}</div>
+        <span className="task-key">{short(task.ID)} · {t(task.State.replaceAll("_", " "))}</span><strong>{task.Title}</strong><span>{task.Description || t("No description")}</span>
+      </button>)}{!results.length && <Message severity="info" text={t("No matching tasks")} />}</div>
     </div>
   </Dialog>;
 }
@@ -532,7 +569,7 @@ function ImportTasks({ projectID, workers, workersLoading, refresh }: { projectI
   const [result, setResult] = useState("");
   const importMutation = useMutation({
     mutationFn: (input: ImportFile) => api<{ imported: number }>(`/projects/${projectID}/tasks/import`, { method: "POST", body: JSON.stringify(input) }),
-    onSuccess: (response) => { setResult(`Imported ${response.imported} tasks.`); setDocument(undefined); setFileName(""); refresh(); },
+    onSuccess: (response) => { setResult(`${t("Imported")} ${response.imported} ${t("tasks")}.`); setDocument(undefined); setFileName(""); refresh(); },
   });
   const firstWorker = workers.find((worker) => worker.Enabled);
   const template: ImportFile = { version: 1, tasks: [
@@ -554,22 +591,22 @@ function ImportTasks({ projectID, workers, workersLoading, refresh }: { projectI
       const parsed: unknown = JSON.parse(await file.text());
       if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as ImportFile).tasks) || (parsed as ImportFile).version !== 1) throw new Error("Expected { version: 1, tasks: [...] }.");
       setDocument(parsed as ImportFile);
-    } catch (e) { setError(e instanceof Error ? e.message : "Could not read JSON file."); }
+    } catch (e) { setError(e instanceof Error ? e.message : t("Could not read JSON file.")); }
   };
   return <div className="import-page">
-    <div className="import-intro"><h2>Import tasks from JSON</h2><p>Prepare a UTF-8 JSON file, preview its task count, then import into this project. The whole file is validated and saved together.</p></div>
-    <div className="import-grid"><section className="import-panel"><h3>1. Download a current template</h3><p>The template includes this project's current custom property names and an available worker slug. It updates when Workers or Properties change.</p><Button label="Download JSON template" icon="pi pi-download" onClick={download} disabled={properties.isLoading || workersLoading} />
-      <h3>Format</h3><ul><li><code>version</code> must be <code>1</code>; <code>tasks</code> contains 1–1000 objects.</li><li><code>title</code> is required. State: backlog, features, in_progress, testing, verification, complete.</li><li>Priority: critical, high, medium, low. Testing: ai, human, hybrid.</li><li>Use <code>assignee.type</code> = unassigned, human, or worker. For workers, set <code>worker</code> to an existing slug or ID.</li><li><code>properties</code> maps current property names or IDs to string values.</li><li>Give tasks a unique <code>key</code> to use <code>depends_on</code> links within this file. IDs are generated on import.</li></ul>
-      <p>All imported tasks are created by Human and receive a System creation event.</p>
-    </section><section className="import-panel"><h3>2. Choose a file</h3><input type="file" accept=".json,application/json" aria-label="Import JSON file" onChange={(e) => void readFile(e.target.files?.[0])} />
-      {fileName && <p>Selected: <strong>{fileName}</strong></p>}
-      {document && <p>Ready to import <strong>{document.tasks.length}</strong> tasks.</p>}
+    <div className="import-intro"><h2>{t("Import tasks from JSON")}</h2><p>{t("Prepare a UTF-8 JSON file, preview its task count, then import into this project. The whole file is validated and saved together.")}</p></div>
+    <div className="import-grid"><section className="import-panel"><h3>{t("1. Download a current template")}</h3><p>{t("The template includes this project's current custom property names and an available worker slug. It updates when Workers or Properties change.")}</p><Button label={t("Download JSON template")} icon="pi pi-download" onClick={download} disabled={properties.isLoading || workersLoading} />
+      <h3>{t("Format")}</h3><ul><li><code>version</code> {t("must be")} <code>1</code>; <code>tasks</code> {t("contains 1–1000 objects.")}</li><li><code>title</code> {t("is required. State: backlog, features, in_progress, testing, verification, complete.")}</li><li>{t("Priority: critical, high, medium, low. Testing: ai, human, hybrid.")}</li><li>{t("Use")} <code>assignee.type</code> = unassigned, human, or worker. {t("For workers, set")} <code>worker</code> {t("to an existing slug or ID.")}</li><li><code>properties</code> {t("maps current property names or IDs to string values.")}</li><li>{t("Give tasks a unique")} <code>key</code> {t("to use")} <code>depends_on</code> {t("links within this file. IDs are generated on import.")}</li></ul>
+      <p>{t("All imported tasks are created by Human and receive a System creation event.")}</p>
+    </section><section className="import-panel"><h3>{t("2. Choose a file")}</h3><input type="file" accept=".json,application/json" aria-label={t("Import JSON file")} onChange={(e) => void readFile(e.target.files?.[0])} />
+      {fileName && <p>{t("Selected:")} <strong>{fileName}</strong></p>}
+      {document && <p>{t("Ready to import")} <strong>{document.tasks.length}</strong> {t("tasks")}.</p>}
       {error && <Message severity="error" text={error} />}
       {importMutation.error && <Message severity="error" text={importMutation.error.message} />}
       {result && <Message severity="success" text={result} />}
-      <Button className="primary" label="Import tasks" icon="pi pi-upload" disabled={!document || importMutation.isPending} loading={importMutation.isPending} onClick={() => document && importMutation.mutate(document)} />
-      <h3>Minimal example</h3><pre>{JSON.stringify({ version: 1, tasks: [{ title: "My first imported task" }] }, null, 2)}</pre>
-      <h3>Project template example</h3><pre>{JSON.stringify(template, null, 2)}</pre>
+      <Button className="primary" label={t("Import tasks")} icon="pi pi-upload" disabled={!document || importMutation.isPending} loading={importMutation.isPending} onClick={() => document && importMutation.mutate(document)} />
+      <h3>{t("Minimal example")}</h3><pre>{JSON.stringify({ version: 1, tasks: [{ title: "My first imported task" }] }, null, 2)}</pre>
+      <h3>{t("Project template example")}</h3><pre>{JSON.stringify(template, null, 2)}</pre>
     </section></div>
   </div>;
 }
@@ -596,7 +633,7 @@ function Column({
         {tasks.map((t) => (
           <TaskCard task={t} key={t.ID} onOpen={onOpen} />
         ))}
-        {!tasks.length && <Card className="empty-column">Drop tasks here</Card>}
+        {!tasks.length && <Card className="empty-column">{t("Drop tasks here")}</Card>}
       </div>
       </Panel>
     </section>
@@ -609,8 +646,9 @@ function TaskCard({
   task: Task;
   onOpen: (id: string) => void;
 }) {
+  const date = useDateFormat();
   const { attributes, listeners, setNodeRef, transform, isDragging } =
-      useDraggable({ id: task.ID, data: { state: task.State } }),
+      useDraggable({ id: task.ID, data: { state: task.BoardColumn || task.State } }),
     style = transform
       ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)` }
       : undefined;
@@ -622,7 +660,7 @@ function TaskCard({
     >
       <Button
         className="drag"
-        aria-label={`Drag task ${task.Title}`}
+        aria-label={`${t("Drag task")} ${task.Title}`}
         {...listeners}
         {...attributes}
         onClick={(e) => e.stopPropagation()}
@@ -630,7 +668,7 @@ function TaskCard({
         <GripVertical size={15} />
       </Button>
       <Card className="task-surface" role="button" tabIndex={0}
-        aria-label={`Open task ${task.Title}`} onClick={() => onOpen(task.ID)}
+        aria-label={`${t("Open task")} ${task.Title}`} onClick={() => onOpen(task.ID)}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
@@ -641,8 +679,8 @@ function TaskCard({
       <h3>{task.Title}</h3>
       {task.Description && <p>{task.Description}</p>}
       <div className="badges">
-        <Tag value={task.Priority} severity={task.Priority === "critical" ? "danger" : task.Priority === "high" ? "warning" : task.Priority === "low" ? "secondary" : "info"} />
-        <Tag value={task.TestingMode} icon="pi pi-check-square" severity="secondary" />
+        <Tag value={t(task.Priority)} severity={task.Priority === "critical" ? "danger" : task.Priority === "high" ? "warning" : task.Priority === "low" ? "secondary" : "info"} />
+        <Tag value={t(task.TestingMode === "ai" ? "AI" : task.TestingMode === "human" ? "Human" : "Hybrid")} icon="pi pi-check-square" severity="secondary" />
         {task.Dependencies?.length > 0 && (
           <Tag value={`↳ ${task.Dependencies.length}`} severity="secondary" />
         )}
@@ -654,7 +692,7 @@ function TaskCard({
           ) : (
             <User size={14} />
           )}{" "}
-          {task.AssigneeName || task.AssigneeType}
+          {task.AssigneeName || t(task.AssigneeType)}
         </span>
         {task.CreatedByType === "agent" ? (
           <span className="origin ai">
@@ -662,11 +700,11 @@ function TaskCard({
             AI · {task.CreatorName}
           </span>
         ) : (
-          <span className="origin">Human</span>
+          <span className="origin">{t("Human")}</span>
         )}
       </div>
       <small title={date(task.UpdatedAt)}>
-        Updated {relativeTime(task.UpdatedAt)}
+        {t("Updated")} {relativeTime(task.UpdatedAt)}
       </small>
       </Card>
     </article>
@@ -675,11 +713,13 @@ function TaskCard({
 
 function TaskForm({
   projectID,
+  columns,
   workers,
   close,
   refresh,
 }: {
   projectID: string;
+  columns: { id: string; name: string }[];
   workers: Worker[];
   close: () => void;
   refresh: () => void;
@@ -713,6 +753,8 @@ function TaskForm({
           method: "POST",
           body: JSON.stringify({
             ...form,
+            State: form.State.startsWith("custom-") ? "backlog" : form.State,
+            BoardColumn: form.State.startsWith("custom-") ? form.State : "",
             Assignee: {
               type: form.AssigneeType,
               worker_id:
@@ -728,10 +770,10 @@ function TaskForm({
       },
     });
   return (
-    <Modal title="Create task" close={close} closing={saved}>
+    <Modal title={t("Create task")} close={close} closing={saved}>
       <div className="form-grid">
         <label className="wide">
-          Title
+          {t("Title")}
           <InputText
             autoFocus
             value={form.Title}
@@ -743,32 +785,32 @@ function TaskForm({
           <MarkdownField value={form.Description} onChange={(value) => setForm({ ...form, Description: value })} />
         </label>
         <label>
-          State
+          {t("State")}
           <SelectField
             value={form.State}
             onChange={(e) => setForm({ ...form, State: e.target.value })}
           >
-            {states.map((s) => (
-              <option key={s[0]} value={s[0]}>
-                {s[1]}
+            {columns.map((s) => (
+              <option key={s.id} value={s.id}>
+                {t(s.name)}
               </option>
             ))}
           </SelectField>
         </label>
         <label>
-          Priority
+          {t("Priority")}
           <SelectField
             value={form.Priority}
             onChange={(e) => setForm({ ...form, Priority: e.target.value })}
           >
-            <option>critical</option>
-            <option>high</option>
-            <option>medium</option>
-            <option>low</option>
+            <option value="critical">{t("critical")}</option>
+            <option value="high">{t("high")}</option>
+            <option value="medium">{t("medium")}</option>
+            <option value="low">{t("low")}</option>
           </SelectField>
         </label>
         <label>
-          Responsible
+          {t("Responsible")}
           <SelectField
             value={
               form.AssigneeType === "worker"
@@ -785,8 +827,8 @@ function TaskForm({
               })
             }
           >
-            <option value="unassigned">Unassigned</option>
-            <option value="human">Human</option>
+            <option value="unassigned">{t("Unassigned")}</option>
+            <option value="human">{t("Human")}</option>
             {workers
               .filter((w) => w.Enabled)
               .map((w) => (
@@ -797,18 +839,18 @@ function TaskForm({
           </SelectField>
         </label>
         <label>
-          Testing mode
+          {t("Testing mode")}
           <SelectField
             value={form.TestingMode}
             onChange={(e) => setForm({ ...form, TestingMode: e.target.value })}
           >
             <option value="ai">AI</option>
-            <option value="human">Human</option>
-            <option value="hybrid">Hybrid</option>
+            <option value="human">{t("Human")}</option>
+            <option value="hybrid">{t("Hybrid")}</option>
           </SelectField>
         </label>
         <label className="wide">
-          Dependencies
+          {t("Dependencies")}
           <SelectField
             multiple
             value={form.DependencyIDs}
@@ -845,11 +887,11 @@ function TaskForm({
           </label>
         ))}
         <label className="wide">
-          AI test instructions
+          {t("AI test instructions")}
           <MarkdownField value={form.AITestInstructions} onChange={(value) => setForm({ ...form, AITestInstructions: value })} />
         </label>
         <label className="wide">
-          Human test instructions
+          {t("Human test instructions")}
           <MarkdownField value={form.HumanTestInstructions} onChange={(value) => setForm({ ...form, HumanTestInstructions: value })} />
         </label>
       </div>
@@ -866,22 +908,25 @@ function TaskForm({
 
 function TaskDrawer({
   id,
+  pollMs,
   workers,
   close,
   refresh,
 }: {
   id: string;
+  pollMs: number;
   workers: Worker[];
   close: () => void;
   refresh: () => void;
 }) {
+  const date = useDateFormat();
   const [editing, setEditing] = useState(false),
     [visible, setVisible] = useState(true),
     qc = useQueryClient(),
     q = useQuery({
       queryKey: ["task", id],
       queryFn: () => api<Details>(`/tasks/${id}`),
-      refetchInterval: 1000,
+      refetchInterval: pollMs,
     }),
     reload = () => {
       qc.invalidateQueries({ queryKey: ["task", id] });
@@ -919,13 +964,13 @@ function TaskDrawer({
       <aside className="drawer">
         <div className="drawer-header">
           <div className="drawer-key">
-            {short(t.ID)} · {t.State.replaceAll("_", " ")}
+            {short(t.ID)} · {translate(t.BoardColumn || t.State.replaceAll("_", " "))}
           </div>
           <div className="drawer-actions">
-            <Button onClick={() => setEditing(true)}>Edit task</Button>
+            <Button onClick={() => setEditing(true)}>{translate("Edit task")}</Button>
             <Button
               className="icon-button"
-              aria-label="Close task"
+              aria-label={translate("Close task")}
               onClick={() => setVisible(false)}
             >
               <X />
@@ -933,19 +978,19 @@ function TaskDrawer({
           </div>
         </div>
         <h2>{t.Title}</h2>
-        <div className="description"><MarkdownView value={t.Description || "No description."} /></div>
+        <div className="description"><MarkdownView value={t.Description || translate("No description.")} /></div>
         <div className="detail-grid">
           <Info
-            label="Created by"
-            value={t.CreatedByType === "agent" ? t.CreatorName : "Human"}
+            label={translate("Created by")}
+            value={t.CreatedByType === "agent" ? t.CreatorName : translate("Human")}
           />
-          <Info label="Created at" value={date(t.CreatedAt)} />
+          <Info label={translate("Created at")} value={date(t.CreatedAt)} />
           <Info
-            label="Source task"
+            label={translate("Source task")}
             value={t.SourceTaskID ? short(t.SourceTaskID) : "—"}
           />
           <label>
-            Responsible
+            {translate("Responsible")}
             <SelectField
               value={
                 t.AssigneeType === "worker"
@@ -954,51 +999,51 @@ function TaskDrawer({
               }
               onChange={(e) => assign.mutate(e.target.value)}
             >
-              <option value="unassigned">Unassigned</option>
-              <option value="human">Human</option>
+              <option value="unassigned">{translate("Unassigned")}</option>
+              <option value="human">{translate("Human")}</option>
               {workers.map((w) => (
                 <option key={w.ID} value={w.ID}>
                   {w.Name}
-                  {!w.Enabled ? " (disabled)" : ""}
+                  {!w.Enabled ? ` (${translate("disabled")})` : ""}
                 </option>
               ))}
             </SelectField>
           </label>
-          <Info label="Priority" value={t.Priority} />
-          <Info label="Testing" value={t.TestingMode} />
+          <Info label={translate("Priority")} value={translate(t.Priority)} />
+          <Info label={translate("Testing")} value={translate(t.TestingMode === "ai" ? "AI" : t.TestingMode === "human" ? "Human" : "Hybrid")} />
         </div>
         {assign.error && <Message severity="error" text={assign.error.message} className="action-error" />}
-        <Panel className="detail-panel" header="Test instructions">
+        <Panel className="detail-panel" header={translate("Test instructions")}>
           <div className="instruction">
             <Tag value="AI" severity="info" />
-            <MarkdownView value={t.AITestInstructions || "None"} />
+            <MarkdownView value={t.AITestInstructions || translate("None")} />
           </div>
           <div className="instruction">
-            <Tag value="Human" severity="secondary" />
-            <MarkdownView value={t.HumanTestInstructions || "None"} />
+            <Tag value={translate("Human")} severity="secondary" />
+            <MarkdownView value={t.HumanTestInstructions || translate("None")} />
           </div>
         </Panel>
         {t.Dependencies?.length > 0 && (
-          <Panel className="detail-panel" header="Dependencies">
+          <Panel className="detail-panel" header={translate("Dependencies")}>
             {t.Dependencies.map((d) => (
               <Card className="related-task" key={d.DependsOnTaskID}>
                 <span>
                   <b>{short(d.DependsOnTaskID)}</b> {d.Title}
                 </span>
-                <Tag value={d.State.replaceAll("_", " ")} severity="secondary" />
-                <Badge value={`${d.Artifacts?.length || 0} artifacts`} severity="info" />
+                <Tag value={translate(d.State.replaceAll("_", " "))} severity="secondary" />
+                <Badge value={`${d.Artifacts?.length || 0} ${translate("artifacts")}`} severity="info" />
               </Card>
             ))}
           </Panel>
         )}
         {t.SpawnedTasks?.length > 0 && (
-          <Panel className="detail-panel" header="Spawned tasks">
+          <Panel className="detail-panel" header={translate("Spawned tasks")}>
             {t.SpawnedTasks.map((s) => (
               <Card className="related-task" key={s.ID}>
                 <span>
                   {short(s.ID)} · {s.Title}
                 </span>
-                <Tag value={s.State.replaceAll("_", " ")} severity="secondary" />
+                <Tag value={translate(s.State.replaceAll("_", " "))} severity="secondary" />
               </Card>
             ))}
           </Panel>
@@ -1062,44 +1107,44 @@ function TaskEditForm({
       .flat()
       .filter((t) => t.ID !== task.ID);
   return (
-    <Modal title="Edit task" close={close} closing={saved}>
+    <Modal title={t("Edit task")} close={close} closing={saved}>
       <div className="form-grid">
         <label className="wide">
-          Title
+          {t("Title")}
           <InputText
             value={form.Title}
             onChange={(e) => setForm({ ...form, Title: e.target.value })}
           />
         </label>
         <label className="wide">
-          Description
+          {t("Description")}
           <MarkdownField value={form.Description} onChange={(value) => setForm({ ...form, Description: value })} />
         </label>
         <label>
-          Priority
+          {t("Priority")}
           <SelectField
             value={form.Priority}
             onChange={(e) => setForm({ ...form, Priority: e.target.value })}
           >
-            <option>critical</option>
-            <option>high</option>
-            <option>medium</option>
-            <option>low</option>
+            <option value="critical">{t("critical")}</option>
+            <option value="high">{t("high")}</option>
+            <option value="medium">{t("medium")}</option>
+            <option value="low">{t("low")}</option>
           </SelectField>
         </label>
         <label>
-          Testing mode
+          {t("Testing mode")}
           <SelectField
             value={form.TestingMode}
             onChange={(e) => setForm({ ...form, TestingMode: e.target.value })}
           >
             <option value="ai">AI</option>
-            <option value="human">Human</option>
-            <option value="hybrid">Hybrid</option>
+            <option value="human">{t("Human")}</option>
+            <option value="hybrid">{t("Hybrid")}</option>
           </SelectField>
         </label>
         <label className="wide">
-          Dependencies
+          {t("Dependencies")}
           <SelectField
             multiple
             value={form.DependencyIDs}
@@ -1136,11 +1181,11 @@ function TaskEditForm({
           </label>
         ))}
         <label className="wide">
-          AI test instructions
+          {t("AI test instructions")}
           <MarkdownField value={form.AITestInstructions} onChange={(value) => setForm({ ...form, AITestInstructions: value })} />
         </label>
         <label className="wide">
-          Human test instructions
+          {t("Human test instructions")}
           <MarkdownField value={form.HumanTestInstructions} onChange={(value) => setForm({ ...form, HumanTestInstructions: value })} />
         </label>
       </div>
@@ -1162,13 +1207,14 @@ function Tabs({
   details: Details;
   addComment: (v: string) => void;
 }) {
+  const date = useDateFormat();
   const [tab, setTab] = useState("History"),
     [text, setText] = useState(""),
     tabs = ["History", "Testing", "Artifacts", "AI usage"];
   return (
     <section className="detail-section grow">
       <TabMenu className="detail-tabs" model={tabs.map((x) => ({
-        label: `${x} · ${x === "History" ? details.History?.length || 0 : x === "Testing" ? details.TestRuns?.length || 0 : x === "Artifacts" ? details.Artifacts?.length || 0 : details.Usage?.length || 0}`,
+        label: `${t(x)} · ${x === "History" ? details.History?.length || 0 : x === "Testing" ? details.TestRuns?.length || 0 : x === "Artifacts" ? details.Artifacts?.length || 0 : details.Usage?.length || 0}`,
         command: () => setTab(x),
       }))} activeIndex={tabs.indexOf(tab)} />
       <div className="detail-tab-content" key={tab}>
@@ -1180,7 +1226,7 @@ function Tabs({
             content={(h: History) => <Card className="activity-card">
               <div className="activity-heading"><b>{h.ActorName}</b><time>{date(h.CreatedAt)}</time></div>
               <p>{h.Content}</p><Tag value={h.EntryType.replaceAll("_", " ")} severity="secondary" />
-            </Card>} /> : <Message severity="info" text="No history yet" />}
+            </Card>} /> : <Message severity="info" text={t("No history yet")} />}
           <form
             className="comment"
             onSubmit={(e) => {
@@ -1192,11 +1238,11 @@ function Tabs({
             }}
           >
             <InputText
-              placeholder="Add a Human comment…"
+              placeholder={t("Add a Human comment…")}
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
-            <Button>Send</Button>
+            <Button>{t("Send")}</Button>
           </form>
         </>
       )}
@@ -1208,17 +1254,17 @@ function Tabs({
             <div className="activity-heading"><b>{r.Runner}</b><time>{date(r.CreatedAt)}</time></div>
             <Tag value={r.Status} severity={r.Status === "passed" ? "success" : "warning"} />
             <p>{r.Summary}</p>{r.Command && <code>{r.Command}</code>}
-          </Card>} /> : <Message severity="info" text="No test runs yet" />
+          </Card>} /> : <Message severity="info" text={t("No test runs yet")} />
       )}
       {tab === "Artifacts" && (
         <div className="artifact-list">
-          {!details.Artifacts?.length && <Message severity="info" text="No artifacts yet" />}
+          {!details.Artifacts?.length && <Message severity="info" text={t("No artifacts yet")} />}
           {details.Artifacts?.map((a) => (
             <Card className="artifact" key={a.ID} title={a.Name} subTitle={`${a.Kind} · ${a.CreatorName || a.CreatedByType} · ${date(a.CreatedAt)}`}>
               <div className="artifact-path" title={a.Path || a.URL}>{a.Path || a.URL}</div>
               {a.Description && <MarkdownView value={a.Description} />}
               {a.Path && (
-                <Button label="Copy path" icon="pi pi-copy" text onClick={() => navigator.clipboard.writeText(a.Path!)} />
+                <Button label={t("Copy path")} icon="pi pi-copy" text onClick={() => navigator.clipboard.writeText(a.Path!)} />
               )}
             </Card>
           ))}
@@ -1226,24 +1272,24 @@ function Tabs({
       )}
       {tab === "AI usage" && (
         <div className="usage-list">
-          {!details.Usage?.length && <Message severity="info" text="No AI usage yet" />}
+          {!details.Usage?.length && <Message severity="info" text={t("No AI usage yet")} />}
           {details.Usage?.map((u) => (
             <Card className="usage" key={u.ID} title={u.WorkerName} subTitle={`${u.Provider || "—"} / ${u.Model || "—"}`}>
               <Divider />
               <dl>
-                <dt>Input</dt>
+                <dt>{t("Input")}</dt>
                 <dd>{u.InputTokens ?? "—"}</dd>
-                <dt>Output</dt>
+                <dt>{t("Output")}</dt>
                 <dd>{u.OutputTokens ?? "—"}</dd>
-                <dt>Reasoning</dt>
+                <dt>{t("Reasoning")}</dt>
                 <dd>{u.ReasoningTokens ?? "—"}</dd>
-                <dt>Cached</dt>
+                <dt>{t("Cached")}</dt>
                 <dd>{u.CachedTokens ?? "—"}</dd>
-                <dt>Model calls</dt>
+                <dt>{t("Model calls")}</dt>
                 <dd>{u.ModelCalls ?? "—"}</dd>
-                <dt>Tool calls</dt>
+                <dt>{t("Tool calls")}</dt>
                 <dd>{u.ToolCalls ?? "—"}</dd>
-                <dt>MCP calls</dt>
+                <dt>{t("MCP calls")}</dt>
                 <dd>{u.MCPCalls ?? "—"}</dd>
               </dl>
             </Card>
@@ -1271,26 +1317,26 @@ function Workers({
   return (
     <div className="workers-page">
       <Toolbar className="section-head" start={<div>
-          <h2>Registered workers</h2>
+          <h2>{t("Registered workers")}</h2>
           <p>
-            Logical AI identities. AgentBoard never launches them automatically.
+            {t("Logical AI identities. AgentBoard never launches them automatically.")}
           </p>
         </div>} end={<Button className="primary" onClick={() => setAdding(true)}>
           <Plus size={16} />
-          Add worker
+          {t("Add worker")}
         </Button>} />
       <DataTable value={workers} dataKey="ID" className="board-table" stripedRows
-        rowHover onRowClick={(event) => setEditing(event.data as Worker)} emptyMessage="No workers yet">
-        <DataColumn header="Name" body={(w: Worker) => <span><b>{w.Name}</b><small>{w.Slug}</small></span>} />
-        <DataColumn field="Kind" header="Kind" />
-        <DataColumn header="Status" body={(w: Worker) => <span>
-          <Tag value={w.Enabled ? w.ActiveSessionCount > 0 ? "Active" : "Offline" : "Disabled"}
+        rowHover onRowClick={(event) => setEditing(event.data as Worker)} emptyMessage={t("No workers yet")}>
+        <DataColumn header={t("Name")} body={(w: Worker) => <span><b>{w.Name}</b><small>{w.Slug}</small></span>} />
+        <DataColumn header={t("Kind")} body={(w: Worker) => t(w.Kind)} />
+        <DataColumn header={t("Status")} body={(w: Worker) => <span>
+          <Tag value={t(w.Enabled ? w.ActiveSessionCount > 0 ? "Active" : "Offline" : "Disabled")}
             severity={w.Enabled && w.ActiveSessionCount > 0 ? "success" : "secondary"} />
-          <small>{w.SessionCount} sessions · {w.MCPCalls} calls</small>
-          <small>Last MCP: {w.LastActivityAt ? relativeTime(w.LastActivityAt) : "Never"}</small>
+          <small>{w.SessionCount} {t("sessions")} · {w.MCPCalls} {t("calls")}</small>
+          <small>{t("Last MCP:")} {w.LastActivityAt ? relativeTime(w.LastActivityAt) : t("Never")}</small>
         </span>} />
-        <DataColumn header="Capabilities" body={(w: Worker) => capabilities(w.Capabilities).join(", ") || "—"} />
-        <DataColumn field="AssignedTaskCount" header="Assigned" />
+        <DataColumn header={t("Capabilities")} body={(w: Worker) => capabilities(w.Capabilities).map(t).join(", ") || "—"} />
+        <DataColumn field="AssignedTaskCount" header={t("Assigned")} />
       </DataTable>
       {(adding || editing) && (
         <WorkerForm
@@ -1320,18 +1366,18 @@ function Properties({ projectID }: { projectID: string }) {
   return (
     <div className="workers-page">
       <Toolbar className="section-head" start={<div>
-          <h2>Task properties</h2>
-          <p>Trello-like fields with explicit Worker visibility.</p>
+          <h2>{t("Task properties")}</h2>
+          <p>{t("Trello-like fields with explicit Worker visibility.")}</p>
         </div>} end={<Button className="primary" onClick={() => setAdding(true)}>
           <Plus size={16} />
-          Add property
+          {t("Add property")}
         </Button>} />
       <DataTable value={q.data || []} dataKey="ID" className="board-table" stripedRows
-        rowHover onRowClick={(event) => setEditing(event.data as PropertyDef)} emptyMessage="No properties yet">
-        <DataColumn field="Name" header="Name" />
-        <DataColumn field="Type" header="Type" />
-        <DataColumn header="Visibility" body={(p: PropertyDef) => p.Visibility.replaceAll("_", " ")} />
-        <DataColumn field="Options" header="Options" />
+        rowHover onRowClick={(event) => setEditing(event.data as PropertyDef)} emptyMessage={t("No properties yet")}>
+        <DataColumn field="Name" header={t("Name")} />
+        <DataColumn field="Type" header={t("Type")} />
+        <DataColumn header={t("Visibility")} body={(p: PropertyDef) => p.Visibility.replaceAll("_", " ")} />
+        <DataColumn field="Options" header={t("Options")} />
       </DataTable>
       {(adding || editing) && (
         <PropertyForm
@@ -1388,17 +1434,17 @@ function PropertyForm({
       },
     });
   return (
-    <Modal title={property ? "Edit property" : "Add property"} close={close} closing={saved}>
+    <Modal title={t(property ? "Edit property" : "Add property")} close={close} closing={saved}>
       <div className="form-grid">
         <label>
-          Name
+          {t("Name")}
           <InputText
             value={form.Name}
             onChange={(e) => setForm({ ...form, Name: e.target.value })}
           />
         </label>
         <label>
-          Type
+          {t("Type")}
           <SelectField
             value={form.Type}
             onChange={(e) => setForm({ ...form, Type: e.target.value })}
@@ -1418,19 +1464,19 @@ function PropertyForm({
           </SelectField>
         </label>
         <label className="wide">
-          Visibility
+          {t("Visibility")}
           <SelectField
             value={form.Visibility}
             onChange={(e) => setForm({ ...form, Visibility: e.target.value })}
           >
-            <option value="human_only">Human only</option>
-            <option value="agent_read">Agent read</option>
-            <option value="agent_read_write">Agent read/write</option>
+            <option value="human_only">{t("Human only")}</option>
+            <option value="agent_read">{t("Agent read")}</option>
+            <option value="agent_read_write">{t("Agent read/write")}</option>
           </SelectField>
         </label>
         {["select", "multi_select"].includes(form.Type) && (
           <label className="wide">
-            Options JSON
+            {t("Options JSON")}
             <InputTextarea
               className="mono"
               value={form.Options}
@@ -1443,12 +1489,12 @@ function PropertyForm({
       {remove.error && <Message severity="error" text={remove.error.message} className="action-error" />}
       {property && (
         <Button className="danger-link" onClick={() => setConfirmRemove(true)}>
-          Delete property
+          {t("Delete property")}
         </Button>
       )}
       <ConfirmDialog visible={confirmRemove} onHide={() => setConfirmRemove(false)}
-        header="Delete property?" message={`Delete ${property?.Name}? Task values for this property will be removed.`}
-        icon="pi pi-exclamation-triangle" acceptLabel="Delete" rejectLabel="Cancel"
+        header={t("Delete property?")} message={`${t("Delete")} ${property?.Name}? ${t("Task values for this property will be removed.")}`}
+        icon="pi pi-exclamation-triangle" acceptLabel={t("Delete")} rejectLabel={t("Cancel")}
         acceptClassName="p-button-danger" defaultFocus="reject" accept={() => remove.mutate()} />
       <DialogActions
         close={close}
@@ -1481,17 +1527,19 @@ function WorkerForm({
   close: () => void;
   refresh: () => void;
 }) {
+  const date = useDateFormat();
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [preset, setPreset] = useState(worker ? "Custom" : "Generic");
+  const [preset, setPreset] = useState(worker ? "Custom" : "Coding");
   const [form, setForm] = useState({
-      Name: worker?.Name || "",
-      Slug: worker?.Slug || "",
+      Name: worker?.Name || "Codex",
+      Slug: worker?.Slug || "codex",
       Description: worker?.Description || "",
       Kind: worker?.Kind || "external",
+      Harness: worker?.Harness || "codex",
       Capabilities:
         worker?.Capabilities ||
-        JSON.stringify(capabilityPresets.Generic, null, 2),
+        presetCapabilities("codex"),
       Enabled: worker?.Enabled ?? true,
     }),
     save = useMutation({
@@ -1513,28 +1561,45 @@ function WorkerForm({
       },
     });
   return (
-    <Modal title={worker ? "Edit worker" : "Add worker"} close={close} closing={saved}>
+    <Modal title={worker ? t("Edit worker") : t("Add worker")} close={close} closing={saved}>
       <div className="form-grid">
+        <label className="wide">
+          {t("MCP client preset")}
+          <SelectField value={form.Harness} onChange={(e) => {
+            const harness = e.target.value;
+            const selected = harnessPresets.find((item) => item.id === harness);
+            if (!selected) return;
+            const previous = harnessPresets.find((item) => item.id === form.Harness);
+            setPreset(selected.capabilities);
+            setForm({ ...form, Harness: harness,
+              Name: !form.Name || form.Name === previous?.name ? selected.name : form.Name,
+              Slug: !form.Slug || form.Slug === previous?.id ? harness : form.Slug,
+              Capabilities: presetCapabilities(harness) });
+          }}>
+            {harnessPresets.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </SelectField>
+          <small>{t(harnessPresets.find((item) => item.id === form.Harness)?.description || "")}</small>
+        </label>
         <label>
-          Name
+          {t("Name")}
           <InputText
             value={form.Name}
             onChange={(e) => setForm({ ...form, Name: e.target.value })}
           />
         </label>
         <label>
-          Slug
+          {t("Slug")}
           <InputText
             value={form.Slug}
             onChange={(e) => setForm({ ...form, Slug: e.target.value })}
           />
         </label>
         <label className="wide">
-          Description
+          {t("Description")}
           <MarkdownField value={form.Description} onChange={(value) => setForm({ ...form, Description: value })} />
         </label>
         <label>
-          Kind
+          {t("Kind")}
           <SelectField
             value={form.Kind}
             onChange={(e) => setForm({ ...form, Kind: e.target.value })}
@@ -1546,10 +1611,10 @@ function WorkerForm({
         <label className="check">
           <InputSwitch checked={form.Enabled}
             onChange={(e) => setForm({ ...form, Enabled: !!e.value })} />
-          Enabled
+          {t("Enabled")}
         </label>
         <label className="wide">
-          Capability preset
+          {t("Capability preset")}
           <SelectField
             value={preset}
             onChange={(e) => {
@@ -1572,7 +1637,7 @@ function WorkerForm({
           </SelectField>
         </label>
         <label className="wide">
-          Advanced: capabilities JSON
+          {t("Advanced: capabilities JSON")}
           <InputTextarea
             className="mono"
             rows={9}
@@ -1584,19 +1649,23 @@ function WorkerForm({
           />
         </label>
       </div>
+      {!worker && form.Slug && <div className="worker-config-preview"><strong>{t("MCP configuration")} · {mcpConfiguration(form.Harness, projectPath, form.Slug).location}</strong>
+        <InputTextarea readOnly className="mono" rows={6} value={mcpConfiguration(form.Harness, projectPath, form.Slug).text} />
+        <small>{t("Save this worker, then open it to run the MCP connection check. The command uses agentboard on PATH; the check provides the exact executable path.")}</small>
+      </div>}
       {save.error && <Message severity="error" text={save.error.message} className="action-error" />}
       {archive.error && <Message severity="error" text={archive.error.message} className="action-error" />}
       {worker && (
-        <WorkerDiagnostics worker={worker} projectPath={projectPath} />
+        <WorkerDiagnostics worker={worker} projectPath={projectPath} formatDate={date} />
       )}
       {worker && (
         <Button className="danger-link" onClick={() => setConfirmArchive(true)}>
-          Archive worker
+          {t("Archive worker")}
         </Button>
       )}
       <ConfirmDialog visible={confirmArchive} onHide={() => setConfirmArchive(false)}
-        header="Archive worker?" message={`Archive ${worker?.Name}? It will no longer be available for new task assignments.`}
-        icon="pi pi-exclamation-triangle" acceptLabel="Archive" rejectLabel="Cancel"
+        header={t("Archive worker?")} message={`${t("Archive")} ${worker?.Name}? ${t("It will no longer be available for new task assignments.")}`}
+        icon="pi pi-exclamation-triangle" acceptLabel={t("Archive")} rejectLabel={t("Cancel")}
         acceptClassName="p-button-danger" defaultFocus="reject" accept={() => archive.mutate()} />
       <DialogActions
         close={close}
@@ -1644,9 +1713,9 @@ function DialogActions({
   const animatedClose = useContext(ModalCloseContext) || close;
   return (
     <Toolbar className="dialog-actions" end={<>
-      <Button label="Cancel" text severity="secondary" onClick={animatedClose} />
+      <Button label={t("Cancel")} text severity="secondary" onClick={animatedClose} />
       <Button className="primary" loading={busy} disabled={busy || disabled} onClick={save}>
-        {busy ? "Saving…" : "Save"}
+        {busy ? t("Saving…") : t("Save")}
       </Button>
     </>} />
   );

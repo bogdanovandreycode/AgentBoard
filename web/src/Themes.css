@@ -1,0 +1,74 @@
+.settings-page { display: grid; gap: 18px; max-width: 1150px; padding-bottom: 35px; }
+.settings-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
+.settings-panel h2 { margin: 0 0 12px; font-size: 18px; }
+.settings-panel p { font-size: 13px; color: var(--muted); line-height: 1.55; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.settings-grid label { display: grid; gap: 8px; font-size: 13px; font-weight: 600; }
+.settings-grid .p-dropdown, .settings-grid .p-inputtext { width: 100%; }
+.settings-columns { display: grid; gap: 8px; margin: 16px 0; }
+.settings-column { display: flex; align-items: center; gap: 14px; min-height: 47px; padding: 5px 10px 5px 15px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel2); }
+.settings-column span { font-weight: 650; min-width: 120px; }
+.settings-column small { color: var(--muted); }
+.settings-column-actions { margin-left: auto; display: flex; gap: 2px; }
+.settings-column-actions .p-button { width: 32px; height: 32px; padding: 4px; }
+.settings-add { display: flex; gap: 8px; max-width: 520px; }
+.settings-add .p-inputtext { flex: 1; min-width: 0; }
+.settings-command { display: block; padding: 12px; background: var(--panel2); border-radius: 7px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.language-picker { position: relative; width: 100%; z-index: 5; }
+.language-trigger { width: 100%; min-height: 43px; display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; text-align: left; }
+.language-menu { position: absolute; z-index: 50; left: 0; right: 0; top: calc(100% + 4px); padding: 8px; background: var(--panel2); border: 1px solid var(--line); border-radius: 13px; box-shadow: 0 16px 42px #0006; }
+.language-menu input { width: 100%; padding: 8px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 7px; }
+.language-options { max-height: 310px; overflow-y: auto; display: grid; gap: 2px; margin-top: 6px; }
+.language-options button { width: 100%; display: flex; justify-content: space-between; border: 0; background: transparent; color: var(--text); padding: 8px 10px; border-radius: 7px; text-align: left; }
+.language-options button:hover, .language-options button.selected { background: color-mix(in srgb, var(--accent) 24%, var(--panel2)); }
+.language-options button span { color: var(--accent); }
+.worker-config-preview { display: grid; gap: 8px; margin-top: 16px; }
+.worker-config-preview .p-inputtextarea { width: 100%; }
+.worker-config-preview small { color: var(--muted); }
+.mcp-check { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+:root[data-theme="black"] { --bg:#000; --panel:#0b0b0b; --panel2:#171717; --line:#343434; --text:#fafafa; --muted:#aaa; --accent:#a99cff; }
+:root[data-theme="ubuntu"] { --bg:#2c172c; --panel:#351f36; --panel2:#432a43; --line:#694b68; --text:#fff4f4; --muted:#d5bdcf; --accent:#e96725; }
+:root[data-theme="light"] { --bg:#f4f7fb; --panel:#fff; --panel2:#edf2f9; --line:#ced8e6; --text:#1c293a; --muted:#55677d; --accent:#6156ce; color: var(--text); background: var(--bg); }
+:root[data-theme="windows"] { --bg:#f5f6f8; --panel:#fff; --panel2:#edf2f8; --line:#c9d4e1; --text:#172335; --muted:#586b80; --accent:#0078d4; color: var(--text); background: var(--bg); }
+:root[data-theme="black"], :root[data-theme="ubuntu"] { color: var(--text); background: var(--bg); }
+:root[data-theme="black"] .app-shell, :root[data-theme="ubuntu"] .app-shell,
+:root[data-theme="light"] .app-shell, :root[data-theme="windows"] .app-shell { background: var(--bg); color: var(--text); }
+:root[data-theme="black"] .sidebar, :root[data-theme="ubuntu"] .sidebar,
+:root[data-theme="light"] .sidebar, :root[data-theme="windows"] .sidebar { background: var(--panel); }
+:root[data-theme="ubuntu"] .brand-mark, :root[data-theme="ubuntu"] .p-button.primary { background: var(--accent); }
+:root[data-theme="windows"] .brand-mark, :root[data-theme="windows"] .p-button.primary { background: var(--accent); }
+:root[data-theme="light"] .brand-mark, :root[data-theme="light"] .p-button.primary { background: var(--accent); }
+:root[data-theme="black"] .board-panel.p-panel, :root[data-theme="ubuntu"] .board-panel.p-panel,
+:root[data-theme="light"] .board-panel.p-panel, :root[data-theme="windows"] .board-panel.p-panel,
+:root[data-theme="black"] .section-head, :root[data-theme="ubuntu"] .section-head,
+:root[data-theme="light"] .section-head, :root[data-theme="windows"] .section-head,
+:root[data-theme="black"] .import-panel, :root[data-theme="ubuntu"] .import-panel,
+:root[data-theme="light"] .import-panel, :root[data-theme="windows"] .import-panel { background: var(--panel); }
+:root[data-theme="black"] .task-card .task-surface.p-card, :root[data-theme="ubuntu"] .task-card .task-surface.p-card,
+:root[data-theme="light"] .task-card .task-surface.p-card, :root[data-theme="windows"] .task-card .task-surface.p-card,
+:root[data-theme="black"] .activity-card.p-card, :root[data-theme="ubuntu"] .activity-card.p-card,
+:root[data-theme="light"] .activity-card.p-card, :root[data-theme="windows"] .activity-card.p-card,
+:root[data-theme="black"] .artifact.p-card, :root[data-theme="ubuntu"] .artifact.p-card,
+:root[data-theme="light"] .artifact.p-card, :root[data-theme="windows"] .artifact.p-card { background: var(--panel2); border-color: var(--line); color: var(--text); }
+:root[data-theme="light"] .task-sidebar.p-sidebar, :root[data-theme="windows"] .task-sidebar.p-sidebar,
+:root[data-theme="black"] .task-sidebar.p-sidebar, :root[data-theme="ubuntu"] .task-sidebar.p-sidebar { background: var(--panel); color: var(--text); }
+:root[data-theme="light"] .filters, :root[data-theme="windows"] .filters,
+:root[data-theme="black"] .filters, :root[data-theme="ubuntu"] .filters { background: var(--panel); }
+:root[data-theme="light"] .sidebar nav .p-button.active, :root[data-theme="windows"] .sidebar nav .p-button.active,
+:root[data-theme="black"] .sidebar nav .p-button.active, :root[data-theme="ubuntu"] .sidebar nav .p-button.active { background: var(--panel2); color: var(--accent); }
+:root[data-theme="light"] .sidebar-note, :root[data-theme="windows"] .sidebar-note,
+:root[data-theme="black"] .sidebar-note, :root[data-theme="ubuntu"] .sidebar-note { background: var(--panel2); color: var(--muted); border-color: var(--line); }
+:root[data-theme="light"] .board-table .p-datatable-thead > tr > th, :root[data-theme="windows"] .board-table .p-datatable-thead > tr > th,
+:root[data-theme="black"] .board-table .p-datatable-thead > tr > th, :root[data-theme="ubuntu"] .board-table .p-datatable-thead > tr > th { background: var(--panel2); color: var(--muted); }
+:root[data-theme="light"] .form-grid label, :root[data-theme="windows"] .form-grid label { color: var(--text); }
+:root[data-theme="light"] .task-surface p, :root[data-theme="windows"] .task-surface p,
+:root[data-theme="light"] .import-panel p, :root[data-theme="windows"] .import-panel p { color: var(--muted); }
+:root[data-theme="light"] .detail-panel .p-panel-header, :root[data-theme="windows"] .detail-panel .p-panel-header,
+:root[data-theme="light"] .detail-panel .p-panel-content, :root[data-theme="windows"] .detail-panel .p-panel-content { background: var(--panel); color: var(--text); }
+:root[data-theme="light"] .markdown-preview, :root[data-theme="windows"] .markdown-preview { background: var(--panel); }
+:root[data-theme="light"] .markdown-toolbar, :root[data-theme="windows"] .markdown-toolbar { background: var(--panel2); }
+:root[data-theme="light"] .markdown-toolbar button, :root[data-theme="windows"] .markdown-toolbar button { color: var(--text); }
+:root[data-theme="light"] .board-mode button, :root[data-theme="windows"] .board-mode button { color: var(--text); background: var(--panel); }
+:root[data-theme="light"] .board-mode button.active, :root[data-theme="windows"] .board-mode button.active { color: #fff; background: var(--accent); }
+@media (max-width: 650px) { .settings-add { flex-wrap: wrap; } .settings-column small { display: none; } }

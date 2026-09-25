@@ -32,3 +32,4 @@ Thumbs.db
 /.agentboard/
 /.playwright-cli/
 /output/playwright/
+/release/

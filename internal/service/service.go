@@ -334,8 +334,8 @@ func (s *Service) HumanMove(ctx context.Context, taskID, target string) (core.Ta
 	if err != nil {
 		return t, err
 	}
-	valid := map[string]bool{"backlog": true, "features": true, "in_progress": true, "testing": true, "verification": true, "complete": true}
-	if !valid[target] {
+	state, boardColumn, err := s.resolveHumanColumn(ctx, t.ProjectID, target)
+	if err != nil {
 		return t, core.ErrInvalidTransition
 	}
 	tx, err := s.Store.DB.BeginTx(ctx, nil)
@@ -344,11 +344,13 @@ func (s *Service) HumanMove(ctx context.Context, taskID, target string) (core.Ta
 	}
 	defer tx.Rollback()
 	now := core.Now()
-	_, err = tx.ExecContext(ctx, `UPDATE tasks SET state=?,updated_at=? WHERE id=?`, target, now, taskID)
+	_, err = tx.ExecContext(ctx, `UPDATE tasks SET state=?,board_column=?,updated_at=? WHERE id=?`, state, boardColumn, now, taskID)
 	if err != nil {
 		return t, err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO history_entries(id,task_id,actor_type,entry_type,content,created_at) VALUES(?,?,?,?,?,?)`, id(), taskID, "system", "state_transition", fmt.Sprintf("State changed by Human: %s → %s", t.State, target), now)
+	from := t.State
+	if t.BoardColumn != "" { from = t.BoardColumn }
+	_, err = tx.ExecContext(ctx, `INSERT INTO history_entries(id,task_id,actor_type,entry_type,content,created_at) VALUES(?,?,?,?,?,?)`, id(), taskID, "system", "state_transition", fmt.Sprintf("State changed by Human: %s → %s", from, target), now)
 	if err != nil {
 		return t, err
 	}
@@ -366,12 +368,19 @@ func (s *Service) HumanBoard(ctx context.Context, projectID string) (core.Board,
 	b := core.Board{"backlog": {}, "features": {}, "in_progress": {}, "testing": {}, "verification": {}, "complete": {}}
 	for i := range tasks {
 		tasks[i].Dependencies, _ = s.ListDependencies(ctx, tasks[i].ID)
-		b[tasks[i].State] = append(b[tasks[i].State], tasks[i])
+		column := tasks[i].State
+		if tasks[i].BoardColumn != "" { column = tasks[i].BoardColumn }
+		b[column] = append(b[column], tasks[i])
 	}
 	return b, nil
 }
 
 func (s *Service) HumanCreateTask(ctx context.Context, projectID string, in core.TaskInput) (core.Task, error) {
+	if in.BoardColumn != "" {
+		state, boardColumn, err := s.resolveHumanColumn(ctx, projectID, in.BoardColumn)
+		if err != nil || boardColumn == "" { return core.Task{}, core.ErrInvalidInput }
+		in.State, in.BoardColumn = state, boardColumn
+	}
 	if in.Assignee.Type == "" {
 		in.Assignee.Type = "unassigned"
 	}
@@ -550,11 +559,11 @@ func (s *Service) ListDependencies(ctx context.Context, taskID string) ([]core.D
 
 // Kept local so workflow queries stay aligned with persistence scans without exposing SQL internals.
 func persistenceTaskSelect() string {
-	return `SELECT t.id,t.project_id,t.title,t.description,t.state,t.position,t.priority,t.assignee_type,t.assignee_worker_id,t.created_by_type,t.created_by_worker_id,t.created_by_session_id,t.source_task_id,t.testing_mode,t.ai_test_instructions,t.human_test_instructions,t.created_at,t.updated_at,COALESCE(aw.name,''),COALESCE(cw.name,'') FROM tasks t LEFT JOIN workers aw ON aw.id=t.assignee_worker_id LEFT JOIN workers cw ON cw.id=t.created_by_worker_id`
+	return `SELECT t.id,t.project_id,t.title,t.description,t.state,t.position,t.priority,t.assignee_type,t.assignee_worker_id,t.created_by_type,t.created_by_worker_id,t.created_by_session_id,t.source_task_id,t.testing_mode,t.ai_test_instructions,t.human_test_instructions,t.created_at,t.updated_at,COALESCE(aw.name,''),COALESCE(cw.name,''),t.board_column FROM tasks t LEFT JOIN workers aw ON aw.id=t.assignee_worker_id LEFT JOIN workers cw ON cw.id=t.created_by_worker_id`
 }
 func scanTask(row interface{ Scan(...any) error }) (core.Task, error) {
 	var t core.Task
-	err := row.Scan(&t.ID, &t.ProjectID, &t.Title, &t.Description, &t.State, &t.Position, &t.Priority, &t.AssigneeType, &t.AssigneeWorkerID, &t.CreatedByType, &t.CreatedByWorkerID, &t.CreatedBySessionID, &t.SourceTaskID, &t.TestingMode, &t.AITestInstructions, &t.HumanTestInstructions, &t.CreatedAt, &t.UpdatedAt, &t.AssigneeName, &t.CreatorName)
+	err := row.Scan(&t.ID, &t.ProjectID, &t.Title, &t.Description, &t.State, &t.Position, &t.Priority, &t.AssigneeType, &t.AssigneeWorkerID, &t.CreatedByType, &t.CreatedByWorkerID, &t.CreatedBySessionID, &t.SourceTaskID, &t.TestingMode, &t.AITestInstructions, &t.HumanTestInstructions, &t.CreatedAt, &t.UpdatedAt, &t.AssigneeName, &t.CreatorName, &t.BoardColumn)
 	return t, err
 }
 

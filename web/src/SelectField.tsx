@@ -1,6 +1,7 @@
 import { Children, isValidElement, type ChangeEvent, type ReactNode, type SelectHTMLAttributes } from "react";
 import { Dropdown } from "primereact/dropdown";
 import { MultiSelect } from "primereact/multiselect";
+import { t } from "./i18n";
 
 type Props = Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & {
   children: ReactNode;
@@ -37,7 +38,7 @@ export function SelectField({ children, value, onChange, multiple, className, di
   };
   if (multiple) {
     return <MultiSelect value={value || []} options={options} onChange={(event) => change(event.value || [])}
-      className={className} disabled={disabled} display="chip" filter placeholder="Choose dependencies" />;
+      className={className} disabled={disabled} display="chip" filter placeholder={t("Choose dependencies")} />;
   }
   return <Dropdown value={value} options={options} onChange={(event) => change(event.value)}
     className={className} disabled={disabled} aria-label={props["aria-label"]} />;
