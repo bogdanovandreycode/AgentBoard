@@ -1,5 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Button } from "primereact/button";
+import { InputTextarea } from "primereact/inputtextarea";
+import { Panel } from "primereact/panel";
+import { Tag } from "primereact/tag";
+import { Message } from "primereact/message";
+import { DataTable } from "primereact/datatable";
+import { Column } from "primereact/column";
+import { Divider } from "primereact/divider";
 
 import { relativeTime } from "./workerPresentation";
 
@@ -52,12 +60,12 @@ command = "agentboard"
 args = ["mcp", "--project", ${JSON.stringify(projectPath)}, "--worker", ${JSON.stringify(current.Slug)}]
 `;
   return (
-    <section className="worker-diagnostics">
-      <h3>MCP diagnostics</h3>
-      <p>
-        {current.Enabled ? "Worker enabled" : "Worker disabled"} ·{" "}
-        {current.ActiveSessionCount > 0 ? "Active session" : "Offline"}
-      </p>
+    <Panel className="worker-diagnostics" header="MCP diagnostics" toggleable>
+      <div className="diagnostic-status">
+        <Tag value={current.Enabled ? "Enabled" : "Disabled"} severity={current.Enabled ? "success" : "secondary"} />
+        <Tag value={current.ActiveSessionCount > 0 ? "Active session" : "Offline"}
+          severity={current.ActiveSessionCount > 0 ? "success" : "secondary"} />
+      </div>
       <p>
         {current.SessionCount} sessions · {current.MCPCalls} calls · Last MCP:{" "}
         {current.LastActivityAt
@@ -65,18 +73,15 @@ args = ["mcp", "--project", ${JSON.stringify(projectPath)}, "--worker", ${JSON.s
           : "Never"}
       </p>
       <p>Project: {projectPath}</p>
-      <p>
-        Open sessions are active while the MCP process sends a heartbeat. After
-        90 seconds without a heartbeat, they become offline.
-      </p>
+      <Message severity="info" text="Open sessions are active while the MCP process sends a heartbeat. After 90 seconds without a heartbeat, they become offline." />
       {(info.error || sessions.error) && (
-        <p role="alert">{(info.error || sessions.error)?.message}</p>
+        <Message severity="error" text={(info.error || sessions.error)?.message} />
       )}
       <label>
         Codex MCP config
-        <textarea className="mono" readOnly value={config} rows={5} />
+        <InputTextarea className="mono" readOnly value={config} rows={5} />
       </label>
-      <button
+      <Button
         type="button"
         onClick={async () => {
           try {
@@ -90,39 +95,22 @@ args = ["mcp", "--project", ${JSON.stringify(projectPath)}, "--worker", ${JSON.s
         }}
       >
         Copy MCP config
-      </button>
-      <span role="status">{copyStatus}</span>
+      </Button>
+      {copyStatus && <Message severity={copyStatus === "Copied" ? "success" : "warn"} text={copyStatus} />}
+      <Divider />
       <h4>Recent sessions (up to 50)</h4>
-      {sessions.isLoading && <p>Loading sessions…</p>}
-      {sessions.data?.length === 0 && (
-        <p>
-          No MCP sessions yet. Configure your client, connect, then call
-          get_my_board.
-        </p>
-      )}
-      <div className="session-list">
-        {sessions.data?.map((session) => (
-          <div key={session.ID}>
-            <strong>{new Date(session.StartedAt).toLocaleString()}</strong>
-            <span>
-              {session.EndedAt
-                ? `Ended ${new Date(session.EndedAt).toLocaleString()}`
-                : session.LastSeenAt &&
-                    sessions.dataUpdatedAt - Date.parse(session.LastSeenAt) <
-                      90000
-                  ? "Active"
-                  : "Offline (no recent heartbeat)"}
-            </span>
-            <span>
-              {session.MCPCalls} calls · Last MCP:{" "}
-              {session.LastActivityAt
-                ? relativeTime(session.LastActivityAt)
-                : "Never"}
-            </span>
-            <small>{session.ClientInfo}</small>
-          </div>
-        ))}
-      </div>
-    </section>
+      <DataTable value={sessions.data || []} dataKey="ID" scrollable scrollHeight="240px"
+        className="sessions-table" loading={sessions.isLoading}
+        emptyMessage="No MCP sessions yet. Configure your client, connect, then call get_my_board.">
+        <Column header="Started" body={(session: Session) => new Date(session.StartedAt).toLocaleString()} />
+        <Column header="Status" body={(session: Session) => {
+          const active = !session.EndedAt && !!session.LastSeenAt && sessions.dataUpdatedAt - Date.parse(session.LastSeenAt) < 90000;
+          return <Tag value={session.EndedAt ? "Ended" : active ? "Active" : "Offline"}
+            severity={active ? "success" : "secondary"} />;
+        }} />
+        <Column header="Calls" body={(session: Session) => <span>{session.MCPCalls}<small>Last: {session.LastActivityAt ? relativeTime(session.LastActivityAt) : "Never"}</small></span>} />
+        <Column field="ClientInfo" header="Client" />
+      </DataTable>
+    </Panel>
   );
 }

@@ -6,12 +6,29 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button } from "primereact/button";
+import { Dialog } from "primereact/dialog";
+import { Sidebar } from "primereact/sidebar";
+import { InputText } from "primereact/inputtext";
+import { InputTextarea } from "primereact/inputtextarea";
+import { Tag } from "primereact/tag";
+import { DataTable } from "primereact/datatable";
+import { Column as DataColumn } from "primereact/column";
+import { TabMenu } from "primereact/tabmenu";
+import { InputSwitch } from "primereact/inputswitch";
+import { Card } from "primereact/card";
+import { Panel } from "primereact/panel";
+import { Timeline } from "primereact/timeline";
+import { Toolbar } from "primereact/toolbar";
+import { Avatar } from "primereact/avatar";
+import { Badge } from "primereact/badge";
+import { Divider } from "primereact/divider";
+import { Message } from "primereact/message";
+import { ProgressSpinner } from "primereact/progressspinner";
+import { ConfirmDialog } from "primereact/confirmdialog";
 import {
   Bot,
-  CheckCircle2,
-  ClipboardCheck,
   Columns3,
-  ExternalLink,
   Filter,
   GripVertical,
   Plus,
@@ -22,9 +39,11 @@ import {
   X,
 } from "lucide-react";
 import { WorkerDiagnostics } from "./WorkerDiagnostics";
+import { SelectField } from "./SelectField";
 import { capabilityPresets, relativeTime } from "./workerPresentation";
 import "./App.css";
 import "./Properties.css";
+import "./PrimeLayout.css";
 
 type Project = { ID: string; Name: string; Path: string };
 type Worker = {
@@ -238,27 +257,13 @@ function App() {
       <main className="project-launcher">
         <h1>AgentBoard</h1>
         <h2>Projects</h2>
-        {projectID && (
-          <p role="alert">
-            The requested project is not registered on this server. Select a
-            project below.
-          </p>
-        )}
-        {!projects.data?.length && (
-          <p>
-            Run <code>agentboard init</code> in a project folder. This list
-            updates automatically.
-          </p>
-        )}
+        {projectID && <Message severity="warn" text="The requested project is not registered on this server. Select a project below." />}
+        {!projects.data?.length && <Message severity="info" text={<>Run <code>agentboard init</code> in a project folder. This list updates automatically.</>} />}
         {projects.data?.map((p) => (
-          <button
-            className="project-tile"
-            key={p.ID}
-            onClick={() => selectProject(p.ID)}
-          >
-            <strong>{p.Name}</strong>
-            <span>{p.Path}</span>
-          </button>
+          <Card className="project-tile" key={p.ID} title={p.Name} subTitle={p.Path}>
+            <Button label="Open project" icon="pi pi-arrow-right" iconPos="right" text
+              onClick={() => selectProject(p.ID)} />
+          </Card>
         ))}
       </main>
     );
@@ -272,7 +277,7 @@ function App() {
           <span>AgentBoard</span>
         </div>
         <div className="workspace-label">Workspace</div>
-        <select
+        <SelectField
           className="project-select"
           value={active}
           onChange={(e) => selectProject(e.target.value)}
@@ -282,30 +287,30 @@ function App() {
               {p.Name}
             </option>
           ))}
-        </select>
-        <button onClick={() => selectProject("")}>All projects</button>
+        </SelectField>
+        <Button onClick={() => selectProject("")}>All projects</Button>
         <nav>
-          <button
+          <Button
             className={tab === "board" ? "active" : ""}
             onClick={() => setTab("board")}
           >
             <Columns3 />
             Board
-          </button>
-          <button
+          </Button>
+          <Button
             className={tab === "workers" ? "active" : ""}
             onClick={() => setTab("workers")}
           >
             <Users />
             Workers
-          </button>
-          <button
+          </Button>
+          <Button
             className={tab === "properties" ? "active" : ""}
             onClick={() => setTab("properties")}
           >
             <Settings2 />
             Properties
-          </button>
+          </Button>
         </nav>
         <div className="sidebar-note">
           <Bot size={16} />
@@ -327,10 +332,10 @@ function App() {
             </h1>
           </div>
           {tab === "board" && (
-            <button className="primary" onClick={() => setCreate(true)}>
+            <Button className="primary" onClick={() => setCreate(true)}>
               <Plus size={17} />
               New task
-            </button>
+            </Button>
           )}
         </header>
         {tab === "board" ? (
@@ -355,6 +360,7 @@ function App() {
                 ))}
               </div>
             </DndContext>
+            {move.error && <Message severity="error" text={move.error.message} className="action-error" />}
           </>
         ) : tab === "workers" ? (
           <Workers
@@ -399,20 +405,18 @@ function FilterBar({
   workers: Worker[];
 }) {
   const field = (key: string, children: React.ReactNode) => (
-    <select
+    <SelectField
       value={filters[key]}
       onChange={(e) => setFilters({ ...filters, [key]: e.target.value })}
     >
       {children}
-    </select>
+    </SelectField>
   );
   return (
-    <div className="filters">
-      <span>
+    <Toolbar className="filters" start={<span>
         <Filter size={15} />
         Filters
-      </span>
-      {field(
+      </span>} end={<div className="filter-controls">{field(
         "responsible",
         <>
           <option value="all">All responsible</option>
@@ -451,8 +455,7 @@ function FilterBar({
           <option value="human">Human</option>
           <option value="hybrid">Hybrid</option>
         </>,
-      )}
-    </div>
+      )}</div>} />
   );
 }
 function matches(t: Task, f: any) {
@@ -479,17 +482,18 @@ function Column({
   const { setNodeRef, isOver } = useDroppable({ id: state });
   return (
     <section ref={setNodeRef} className={"column " + (isOver ? "over" : "")}>
-      <div className="column-title">
+      <Panel className="board-panel" header={<div className="column-title">
         <span className={"state-dot " + state} />
         <h2>{label}</h2>
-        <b>{tasks.length}</b>
-      </div>
+        <Tag value={String(tasks.length)} rounded severity="secondary" />
+      </div>}>
       <div className="card-list">
         {tasks.map((t) => (
           <TaskCard task={t} key={t.ID} onOpen={onOpen} />
         ))}
-        {!tasks.length && <div className="empty-column">Drop tasks here</div>}
+        {!tasks.length && <Card className="empty-column">Drop tasks here</Card>}
       </div>
+      </Panel>
     </section>
   );
 }
@@ -510,29 +514,32 @@ function TaskCard({
       ref={setNodeRef}
       style={style}
       className={"task-card " + (isDragging ? "dragging" : "")}
-      onClick={() => onOpen(task.ID)}
     >
-      <button
+      <Button
         className="drag"
+        aria-label={`Drag task ${task.Title}`}
         {...listeners}
         {...attributes}
         onClick={(e) => e.stopPropagation()}
       >
         <GripVertical size={15} />
-      </button>
+      </Button>
+      <Card className="task-surface" role="button" tabIndex={0}
+        aria-label={`Open task ${task.Title}`} onClick={() => onOpen(task.ID)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onOpen(task.ID);
+          }
+        }}>
       <div className="task-key">{short(task.ID)}</div>
       <h3>{task.Title}</h3>
       {task.Description && <p>{task.Description}</p>}
       <div className="badges">
-        <span className={"badge priority " + task.Priority}>
-          {task.Priority}
-        </span>
-        <span className="badge test">
-          <ClipboardCheck size={12} />
-          {task.TestingMode}
-        </span>
+        <Tag value={task.Priority} severity={task.Priority === "critical" ? "danger" : task.Priority === "high" ? "warning" : task.Priority === "low" ? "secondary" : "info"} />
+        <Tag value={task.TestingMode} icon="pi pi-check-square" severity="secondary" />
         {task.Dependencies?.length > 0 && (
-          <span className="badge">↳ {task.Dependencies.length}</span>
+          <Tag value={`↳ ${task.Dependencies.length}`} severity="secondary" />
         )}
       </div>
       <div className="card-footer">
@@ -556,6 +563,7 @@ function TaskCard({
       <small title={date(task.UpdatedAt)}>
         Updated {relativeTime(task.UpdatedAt)}
       </small>
+      </Card>
     </article>
   );
 }
@@ -618,7 +626,7 @@ function TaskForm({
       <div className="form-grid">
         <label className="wide">
           Title
-          <input
+          <InputText
             autoFocus
             value={form.Title}
             onChange={(e) => setForm({ ...form, Title: e.target.value })}
@@ -626,14 +634,14 @@ function TaskForm({
         </label>
         <label className="wide">
           Description
-          <textarea
+          <InputTextarea
             value={form.Description}
             onChange={(e) => setForm({ ...form, Description: e.target.value })}
           />
         </label>
         <label>
           State
-          <select
+          <SelectField
             value={form.State}
             onChange={(e) => setForm({ ...form, State: e.target.value })}
           >
@@ -642,11 +650,11 @@ function TaskForm({
                 {s[1]}
               </option>
             ))}
-          </select>
+          </SelectField>
         </label>
         <label>
           Priority
-          <select
+          <SelectField
             value={form.Priority}
             onChange={(e) => setForm({ ...form, Priority: e.target.value })}
           >
@@ -654,11 +662,11 @@ function TaskForm({
             <option>high</option>
             <option>medium</option>
             <option>low</option>
-          </select>
+          </SelectField>
         </label>
         <label>
           Responsible
-          <select
+          <SelectField
             value={
               form.AssigneeType === "worker"
                 ? form.AssigneeWorkerID
@@ -683,22 +691,22 @@ function TaskForm({
                   {w.Name}
                 </option>
               ))}
-          </select>
+          </SelectField>
         </label>
         <label>
           Testing mode
-          <select
+          <SelectField
             value={form.TestingMode}
             onChange={(e) => setForm({ ...form, TestingMode: e.target.value })}
           >
             <option value="ai">AI</option>
             <option value="human">Human</option>
             <option value="hybrid">Hybrid</option>
-          </select>
+          </SelectField>
         </label>
         <label className="wide">
           Dependencies
-          <select
+          <SelectField
             multiple
             value={form.DependencyIDs}
             onChange={(e) =>
@@ -716,12 +724,12 @@ function TaskForm({
                 {short(t.ID)} · {t.Title}
               </option>
             ))}
-          </select>
+          </SelectField>
         </label>
         {definitions.data?.map((d) => (
           <label key={d.ID}>
             {d.Name}
-            <input
+            <InputText
               value={form.Properties[d.ID] || ""}
               onChange={(e) =>
                 setForm({
@@ -735,7 +743,7 @@ function TaskForm({
         ))}
         <label className="wide">
           AI test instructions
-          <textarea
+          <InputTextarea
             value={form.AITestInstructions}
             onChange={(e) =>
               setForm({ ...form, AITestInstructions: e.target.value })
@@ -744,7 +752,7 @@ function TaskForm({
         </label>
         <label className="wide">
           Human test instructions
-          <textarea
+          <InputTextarea
             value={form.HumanTestInstructions}
             onChange={(e) =>
               setForm({ ...form, HumanTestInstructions: e.target.value })
@@ -752,6 +760,7 @@ function TaskForm({
           />
         </label>
       </div>
+      {save.error && <Message severity="error" text={save.error.message} className="action-error" />}
       <DialogActions
         close={close}
         save={() => save.mutate()}
@@ -806,30 +815,27 @@ function TaskDrawer({
     });
   if (!q.data)
     return (
-      <div className="drawer">
-        <button className="icon-button close" onClick={close}>
-          <X />
-        </button>
-        <p>{q.error ? q.error.message : "Loading…"}</p>
-      </div>
+      <Sidebar visible onHide={close} position="right" className="task-sidebar">
+        {q.error ? <Message severity="error" text={q.error.message} /> : <ProgressSpinner />}
+      </Sidebar>
     );
   const t = q.data;
   return (
-    <div className="drawer-backdrop" onMouseDown={close}>
-      <aside className="drawer" onMouseDown={(e) => e.stopPropagation()}>
+    <Sidebar visible onHide={close} position="right" className="task-sidebar" showCloseIcon={false} blockScroll>
+      <aside className="drawer">
         <div className="drawer-header">
           <div className="drawer-key">
             {short(t.ID)} · {t.State.replaceAll("_", " ")}
           </div>
           <div className="drawer-actions">
-            <button onClick={() => setEditing(true)}>Edit task</button>
-            <button
+            <Button onClick={() => setEditing(true)}>Edit task</Button>
+            <Button
               className="icon-button"
               aria-label="Close task"
               onClick={close}
             >
               <X />
-            </button>
+            </Button>
           </div>
         </div>
         <h2>{t.Title}</h2>
@@ -846,7 +852,7 @@ function TaskDrawer({
           />
           <label>
             Responsible
-            <select
+            <SelectField
               value={
                 t.AssigneeType === "worker"
                   ? t.AssigneeWorkerID
@@ -862,49 +868,46 @@ function TaskDrawer({
                   {!w.Enabled ? " (disabled)" : ""}
                 </option>
               ))}
-            </select>
+            </SelectField>
           </label>
           <Info label="Priority" value={t.Priority} />
           <Info label="Testing" value={t.TestingMode} />
         </div>
-        <section className="detail-section">
-          <h3>Test instructions</h3>
+        {assign.error && <Message severity="error" text={assign.error.message} className="action-error" />}
+        <Panel className="detail-panel" header="Test instructions">
           <div className="instruction">
-            <b>AI</b>
+            <Tag value="AI" severity="info" />
             <span>{t.AITestInstructions || "None"}</span>
           </div>
           <div className="instruction">
-            <b>Human</b>
+            <Tag value="Human" severity="secondary" />
             <span>{t.HumanTestInstructions || "None"}</span>
           </div>
-        </section>
+        </Panel>
         {t.Dependencies?.length > 0 && (
-          <section className="detail-section">
-            <h3>Dependencies</h3>
+          <Panel className="detail-panel" header="Dependencies">
             {t.Dependencies.map((d) => (
-              <div className="row-item" key={d.DependsOnTaskID}>
+              <Card className="related-task" key={d.DependsOnTaskID}>
                 <span>
                   <b>{short(d.DependsOnTaskID)}</b> {d.Title}
                 </span>
-                <span>
-                  {d.State} · {d.Artifacts?.length || 0} artifacts
-                </span>
-              </div>
+                <Tag value={d.State.replaceAll("_", " ")} severity="secondary" />
+                <Badge value={`${d.Artifacts?.length || 0} artifacts`} severity="info" />
+              </Card>
             ))}
-          </section>
+          </Panel>
         )}
         {t.SpawnedTasks?.length > 0 && (
-          <section className="detail-section">
-            <h3>Spawned tasks</h3>
+          <Panel className="detail-panel" header="Spawned tasks">
             {t.SpawnedTasks.map((s) => (
-              <div className="row-item" key={s.ID}>
+              <Card className="related-task" key={s.ID}>
                 <span>
                   {short(s.ID)} · {s.Title}
                 </span>
-                <span>{s.State}</span>
-              </div>
+                <Tag value={s.State.replaceAll("_", " ")} severity="secondary" />
+              </Card>
             ))}
-          </section>
+          </Panel>
         )}
         <Tabs details={t} addComment={(v) => comment.mutate(v)} />
         {editing && (
@@ -915,7 +918,7 @@ function TaskDrawer({
           />
         )}
       </aside>
-    </div>
+    </Sidebar>
   );
 }
 
@@ -968,21 +971,21 @@ function TaskEditForm({
       <div className="form-grid">
         <label className="wide">
           Title
-          <input
+          <InputText
             value={form.Title}
             onChange={(e) => setForm({ ...form, Title: e.target.value })}
           />
         </label>
         <label className="wide">
           Description
-          <textarea
+          <InputTextarea
             value={form.Description}
             onChange={(e) => setForm({ ...form, Description: e.target.value })}
           />
         </label>
         <label>
           Priority
-          <select
+          <SelectField
             value={form.Priority}
             onChange={(e) => setForm({ ...form, Priority: e.target.value })}
           >
@@ -990,22 +993,22 @@ function TaskEditForm({
             <option>high</option>
             <option>medium</option>
             <option>low</option>
-          </select>
+          </SelectField>
         </label>
         <label>
           Testing mode
-          <select
+          <SelectField
             value={form.TestingMode}
             onChange={(e) => setForm({ ...form, TestingMode: e.target.value })}
           >
             <option value="ai">AI</option>
             <option value="human">Human</option>
             <option value="hybrid">Hybrid</option>
-          </select>
+          </SelectField>
         </label>
         <label className="wide">
           Dependencies
-          <select
+          <SelectField
             multiple
             value={form.DependencyIDs}
             onChange={(e) =>
@@ -1023,12 +1026,12 @@ function TaskEditForm({
                 {short(t.ID)} · {t.Title}
               </option>
             ))}
-          </select>
+          </SelectField>
         </label>
         {definitions.data?.map((d) => (
           <label key={d.ID}>
             {d.Name}
-            <input
+            <InputText
               value={form.Properties[d.ID] || ""}
               onChange={(e) =>
                 setForm({
@@ -1042,7 +1045,7 @@ function TaskEditForm({
         ))}
         <label className="wide">
           AI test instructions
-          <textarea
+          <InputTextarea
             value={form.AITestInstructions}
             onChange={(e) =>
               setForm({ ...form, AITestInstructions: e.target.value })
@@ -1051,7 +1054,7 @@ function TaskEditForm({
         </label>
         <label className="wide">
           Human test instructions
-          <textarea
+          <InputTextarea
             value={form.HumanTestInstructions}
             onChange={(e) =>
               setForm({ ...form, HumanTestInstructions: e.target.value })
@@ -1059,6 +1062,7 @@ function TaskEditForm({
           />
         </label>
       </div>
+      {save.error && <Message severity="error" text={save.error.message} className="action-error" />}
       <DialogActions
         close={close}
         save={() => save.mutate()}
@@ -1081,49 +1085,19 @@ function Tabs({
     tabs = ["History", "Testing", "Artifacts", "AI usage"];
   return (
     <section className="detail-section grow">
-      <div className="tabs">
-        {tabs.map((x) => (
-          <button
-            key={x}
-            className={tab === x ? "active" : ""}
-            onClick={() => setTab(x)}
-          >
-            {x}
-            <small>
-              {x === "History"
-                ? details.History?.length
-                : x === "Testing"
-                  ? details.TestRuns?.length
-                  : x === "Artifacts"
-                    ? details.Artifacts?.length
-                    : details.Usage?.length}
-            </small>
-          </button>
-        ))}
-      </div>
+      <TabMenu className="detail-tabs" model={tabs.map((x) => ({
+        label: `${x} · ${x === "History" ? details.History?.length || 0 : x === "Testing" ? details.TestRuns?.length || 0 : x === "Artifacts" ? details.Artifacts?.length || 0 : details.Usage?.length || 0}`,
+        command: () => setTab(x),
+      }))} activeIndex={tabs.indexOf(tab)} />
       {tab === "History" && (
         <>
-          <div className="timeline">
-            {details.History?.map((h) => (
-              <div className="event" key={h.ID}>
-                <span className={"avatar " + h.ActorType}>
-                  {h.ActorType === "agent" ? (
-                    <Bot />
-                  ) : h.ActorType === "human" ? (
-                    <User />
-                  ) : (
-                    <Settings2 />
-                  )}
-                </span>
-                <div>
-                  <b>{h.ActorName}</b>
-                  <time>{date(h.CreatedAt)}</time>
-                  <p>{h.Content}</p>
-                  <small>{h.EntryType}</small>
-                </div>
-              </div>
-            ))}
-          </div>
+          {details.History?.length ? <Timeline value={details.History} dataKey="ID" className="activity-timeline"
+            marker={(h: History) => <Avatar icon={h.ActorType === "agent" ? "pi pi-sparkles" : h.ActorType === "human" ? "pi pi-user" : "pi pi-cog"}
+              shape="circle" className={`actor-${h.ActorType}`} />}
+            content={(h: History) => <Card className="activity-card">
+              <div className="activity-heading"><b>{h.ActorName}</b><time>{date(h.CreatedAt)}</time></div>
+              <p>{h.Content}</p><Tag value={h.EntryType.replaceAll("_", " ")} severity="secondary" />
+            </Card>} /> : <Message severity="info" text="No history yet" />}
           <form
             className="comment"
             onSubmit={(e) => {
@@ -1134,64 +1108,44 @@ function Tabs({
               }
             }}
           >
-            <input
+            <InputText
               placeholder="Add a Human comment…"
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
-            <button>Send</button>
+            <Button>Send</Button>
           </form>
         </>
       )}
       {tab === "Testing" && (
-        <div className="timeline">
-          {details.TestRuns?.map((r) => (
-            <div className="event" key={r.ID}>
-              <span className={"status-icon " + r.Status}>
-                <CheckCircle2 />
-              </span>
-              <div>
-                <b>
-                  {r.Status} · {r.Runner}
-                </b>
-                <time>{date(r.CreatedAt)}</time>
-                <p>{r.Summary}</p>
-                {r.Command && <code>{r.Command}</code>}
-              </div>
-            </div>
-          ))}
-        </div>
+        details.TestRuns?.length ? <Timeline value={details.TestRuns} dataKey="ID" className="activity-timeline"
+          marker={(r: TestRun) => <Avatar icon={r.Status === "passed" ? "pi pi-check" : "pi pi-exclamation-circle"}
+            shape="circle" className={`run-${r.Status}`} />}
+          content={(r: TestRun) => <Card className="activity-card">
+            <div className="activity-heading"><b>{r.Runner}</b><time>{date(r.CreatedAt)}</time></div>
+            <Tag value={r.Status} severity={r.Status === "passed" ? "success" : "warning"} />
+            <p>{r.Summary}</p>{r.Command && <code>{r.Command}</code>}
+          </Card>} /> : <Message severity="info" text="No test runs yet" />
       )}
       {tab === "Artifacts" && (
-        <div>
+        <div className="artifact-list">
+          {!details.Artifacts?.length && <Message severity="info" text="No artifacts yet" />}
           {details.Artifacts?.map((a) => (
-            <div className="artifact" key={a.ID}>
-              <ExternalLink />
-              <div>
-                <b>{a.Name}</b>
-                <p>{a.Path || a.URL}</p>
-                <small>
-                  {a.Kind} · {a.CreatorName || a.CreatedByType} ·{" "}
-                  {date(a.CreatedAt)}
-                </small>
-              </div>
+            <Card className="artifact" key={a.ID} title={a.Name} subTitle={`${a.Kind} · ${a.CreatorName || a.CreatedByType} · ${date(a.CreatedAt)}`}>
+              <p>{a.Path || a.URL}</p>
               {a.Path && (
-                <button onClick={() => navigator.clipboard.writeText(a.Path!)}>
-                  Copy path
-                </button>
+                <Button label="Copy path" icon="pi pi-copy" text onClick={() => navigator.clipboard.writeText(a.Path!)} />
               )}
-            </div>
+            </Card>
           ))}
         </div>
       )}
       {tab === "AI usage" && (
-        <div>
+        <div className="usage-list">
+          {!details.Usage?.length && <Message severity="info" text="No AI usage yet" />}
           {details.Usage?.map((u) => (
-            <div className="usage" key={u.ID}>
-              <b>{u.WorkerName}</b>
-              <span>
-                {u.Provider || "—"} / {u.Model || "—"}
-              </span>
+            <Card className="usage" key={u.ID} title={u.WorkerName} subTitle={`${u.Provider || "—"} / ${u.Model || "—"}`}>
+              <Divider />
               <dl>
                 <dt>Input</dt>
                 <dd>{u.InputTokens ?? "—"}</dd>
@@ -1208,7 +1162,7 @@ function Tabs({
                 <dt>MCP calls</dt>
                 <dd>{u.MCPCalls ?? "—"}</dd>
               </dl>
-            </div>
+            </Card>
           ))}
         </div>
       )}
@@ -1231,63 +1185,28 @@ function Workers({
     [adding, setAdding] = useState(false);
   return (
     <div className="workers-page">
-      <div className="section-head">
-        <div>
+      <Toolbar className="section-head" start={<div>
           <h2>Registered workers</h2>
           <p>
             Logical AI identities. AgentBoard never launches them automatically.
           </p>
-        </div>
-        <button className="primary" onClick={() => setAdding(true)}>
+        </div>} end={<Button className="primary" onClick={() => setAdding(true)}>
           <Plus size={16} />
           Add worker
-        </button>
-      </div>
-      <div className="worker-table">
-        <div className="worker-row header">
-          <span>Name</span>
-          <span>Kind</span>
-          <span>Status</span>
-          <span>Capabilities</span>
-          <span>Assigned</span>
-        </div>
-        {workers.map((w) => (
-          <button
-            key={w.ID}
-            className="worker-row"
-            onClick={() => setEditing(w)}
-          >
-            <span>
-              <b>{w.Name}</b>
-              <small>{w.Slug}</small>
-            </span>
-            <span>{w.Kind}</span>
-            <span>
-              <i
-                className={
-                  w.Enabled && w.ActiveSessionCount > 0 ? "enabled" : "disabled"
-                }
-              />
-              {w.Enabled
-                ? w.ActiveSessionCount > 0
-                  ? "Active"
-                  : "Offline"
-                : "Disabled"}
-              <small>
-                {w.SessionCount} sessions · {w.MCPCalls} calls
-              </small>
-              <small>
-                Last MCP:{" "}
-                {w.LastActivityAt ? relativeTime(w.LastActivityAt) : "Never"}
-              </small>
-            </span>
-            <span className="capabilities">
-              {capabilities(w.Capabilities).join(", ") || "—"}
-            </span>
-            <span>{w.AssignedTaskCount}</span>
-          </button>
-        ))}
-      </div>
+        </Button>} />
+      <DataTable value={workers} dataKey="ID" className="board-table" stripedRows
+        rowHover onRowClick={(event) => setEditing(event.data as Worker)} emptyMessage="No workers yet">
+        <DataColumn header="Name" body={(w: Worker) => <span><b>{w.Name}</b><small>{w.Slug}</small></span>} />
+        <DataColumn field="Kind" header="Kind" />
+        <DataColumn header="Status" body={(w: Worker) => <span>
+          <Tag value={w.Enabled ? w.ActiveSessionCount > 0 ? "Active" : "Offline" : "Disabled"}
+            severity={w.Enabled && w.ActiveSessionCount > 0 ? "success" : "secondary"} />
+          <small>{w.SessionCount} sessions · {w.MCPCalls} calls</small>
+          <small>Last MCP: {w.LastActivityAt ? relativeTime(w.LastActivityAt) : "Never"}</small>
+        </span>} />
+        <DataColumn header="Capabilities" body={(w: Worker) => capabilities(w.Capabilities).join(", ") || "—"} />
+        <DataColumn field="AssignedTaskCount" header="Assigned" />
+      </DataTable>
       {(adding || editing) && (
         <WorkerForm
           projectPath={projectPath}
@@ -1315,36 +1234,20 @@ function Properties({ projectID }: { projectID: string }) {
       qc.invalidateQueries({ queryKey: ["properties", projectID] });
   return (
     <div className="workers-page">
-      <div className="section-head">
-        <div>
+      <Toolbar className="section-head" start={<div>
           <h2>Task properties</h2>
           <p>Trello-like fields with explicit Worker visibility.</p>
-        </div>
-        <button className="primary" onClick={() => setAdding(true)}>
+        </div>} end={<Button className="primary" onClick={() => setAdding(true)}>
           <Plus size={16} />
           Add property
-        </button>
-      </div>
-      <div className="worker-table">
-        <div className="property-row header">
-          <span>Name</span>
-          <span>Type</span>
-          <span>Visibility</span>
-          <span>Options</span>
-        </div>
-        {q.data?.map((p) => (
-          <button
-            key={p.ID}
-            className="property-row"
-            onClick={() => setEditing(p)}
-          >
-            <b>{p.Name}</b>
-            <span>{p.Type}</span>
-            <span>{p.Visibility.replaceAll("_", " ")}</span>
-            <code>{p.Options}</code>
-          </button>
-        ))}
-      </div>
+        </Button>} />
+      <DataTable value={q.data || []} dataKey="ID" className="board-table" stripedRows
+        rowHover onRowClick={(event) => setEditing(event.data as PropertyDef)} emptyMessage="No properties yet">
+        <DataColumn field="Name" header="Name" />
+        <DataColumn field="Type" header="Type" />
+        <DataColumn header="Visibility" body={(p: PropertyDef) => p.Visibility.replaceAll("_", " ")} />
+        <DataColumn field="Options" header="Options" />
+      </DataTable>
       {(adding || editing) && (
         <PropertyForm
           projectID={projectID}
@@ -1370,6 +1273,7 @@ function PropertyForm({
   close: () => void;
   refresh: () => void;
 }) {
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [form, setForm] = useState({
       Name: property?.Name || "",
       Type: property?.Type || "text",
@@ -1402,14 +1306,14 @@ function PropertyForm({
       <div className="form-grid">
         <label>
           Name
-          <input
+          <InputText
             value={form.Name}
             onChange={(e) => setForm({ ...form, Name: e.target.value })}
           />
         </label>
         <label>
           Type
-          <select
+          <SelectField
             value={form.Type}
             onChange={(e) => setForm({ ...form, Type: e.target.value })}
           >
@@ -1425,23 +1329,23 @@ function PropertyForm({
             ].map((x) => (
               <option key={x}>{x}</option>
             ))}
-          </select>
+          </SelectField>
         </label>
         <label className="wide">
           Visibility
-          <select
+          <SelectField
             value={form.Visibility}
             onChange={(e) => setForm({ ...form, Visibility: e.target.value })}
           >
             <option value="human_only">Human only</option>
             <option value="agent_read">Agent read</option>
             <option value="agent_read_write">Agent read/write</option>
-          </select>
+          </SelectField>
         </label>
         {["select", "multi_select"].includes(form.Type) && (
           <label className="wide">
             Options JSON
-            <textarea
+            <InputTextarea
               className="mono"
               value={form.Options}
               onChange={(e) => setForm({ ...form, Options: e.target.value })}
@@ -1449,11 +1353,17 @@ function PropertyForm({
           </label>
         )}
       </div>
+      {save.error && <Message severity="error" text={save.error.message} className="action-error" />}
+      {remove.error && <Message severity="error" text={remove.error.message} className="action-error" />}
       {property && (
-        <button className="danger-link" onClick={() => remove.mutate()}>
+        <Button className="danger-link" onClick={() => setConfirmRemove(true)}>
           Delete property
-        </button>
+        </Button>
       )}
+      <ConfirmDialog visible={confirmRemove} onHide={() => setConfirmRemove(false)}
+        header="Delete property?" message={`Delete ${property?.Name}? Task values for this property will be removed.`}
+        icon="pi pi-exclamation-triangle" acceptLabel="Delete" rejectLabel="Cancel"
+        acceptClassName="p-button-danger" defaultFocus="reject" accept={() => remove.mutate()} />
       <DialogActions
         close={close}
         save={() => save.mutate()}
@@ -1485,6 +1395,7 @@ function WorkerForm({
   close: () => void;
   refresh: () => void;
 }) {
+  const [confirmArchive, setConfirmArchive] = useState(false);
   const [preset, setPreset] = useState(worker ? "Custom" : "Generic");
   const [form, setForm] = useState({
       Name: worker?.Name || "",
@@ -1519,46 +1430,43 @@ function WorkerForm({
       <div className="form-grid">
         <label>
           Name
-          <input
+          <InputText
             value={form.Name}
             onChange={(e) => setForm({ ...form, Name: e.target.value })}
           />
         </label>
         <label>
           Slug
-          <input
+          <InputText
             value={form.Slug}
             onChange={(e) => setForm({ ...form, Slug: e.target.value })}
           />
         </label>
         <label className="wide">
           Description
-          <textarea
+          <InputTextarea
             value={form.Description}
             onChange={(e) => setForm({ ...form, Description: e.target.value })}
           />
         </label>
         <label>
           Kind
-          <select
+          <SelectField
             value={form.Kind}
             onChange={(e) => setForm({ ...form, Kind: e.target.value })}
           >
             <option value="external">external</option>
             <option value="custom">custom</option>
-          </select>
+          </SelectField>
         </label>
         <label className="check">
-          <input
-            type="checkbox"
-            checked={form.Enabled}
-            onChange={(e) => setForm({ ...form, Enabled: e.target.checked })}
-          />
+          <InputSwitch checked={form.Enabled}
+            onChange={(e) => setForm({ ...form, Enabled: !!e.value })} />
           Enabled
         </label>
         <label className="wide">
           Capability preset
-          <select
+          <SelectField
             value={preset}
             onChange={(e) => {
               setPreset(e.target.value);
@@ -1577,11 +1485,11 @@ function WorkerForm({
               <option key={name}>{name}</option>
             ))}
             <option>Custom</option>
-          </select>
+          </SelectField>
         </label>
         <label className="wide">
           Advanced: capabilities JSON
-          <textarea
+          <InputTextarea
             className="mono"
             rows={9}
             value={form.Capabilities}
@@ -1592,16 +1500,20 @@ function WorkerForm({
           />
         </label>
       </div>
-      {save.error && <p role="alert">{save.error.message}</p>}
-      {archive.error && <p role="alert">{archive.error.message}</p>}
+      {save.error && <Message severity="error" text={save.error.message} className="action-error" />}
+      {archive.error && <Message severity="error" text={archive.error.message} className="action-error" />}
       {worker && (
         <WorkerDiagnostics worker={worker} projectPath={projectPath} />
       )}
       {worker && (
-        <button className="danger-link" onClick={() => archive.mutate()}>
+        <Button className="danger-link" onClick={() => setConfirmArchive(true)}>
           Archive worker
-        </button>
+        </Button>
       )}
+      <ConfirmDialog visible={confirmArchive} onHide={() => setConfirmArchive(false)}
+        header="Archive worker?" message={`Archive ${worker?.Name}? It will no longer be available for new task assignments.`}
+        icon="pi pi-exclamation-triangle" acceptLabel="Archive" rejectLabel="Cancel"
+        acceptClassName="p-button-danger" defaultFocus="reject" accept={() => archive.mutate()} />
       <DialogActions
         close={close}
         save={() => save.mutate()}
@@ -1621,17 +1533,10 @@ function Modal({
   children: React.ReactNode;
 }) {
   return (
-    <div className="modal-backdrop" onMouseDown={close}>
-      <div className="modal" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="modal-head">
-          <h2>{title}</h2>
-          <button className="icon-button" onClick={close}>
-            <X />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
+    <Dialog header={title} visible onHide={close} modal blockScroll draggable={false}
+      className="form-dialog" style={{ width: "min(760px, calc(100vw - 24px))" }}>
+      {children}
+    </Dialog>
   );
 }
 function DialogActions({
@@ -1646,30 +1551,27 @@ function DialogActions({
   disabled?: boolean;
 }) {
   return (
-    <div className="dialog-actions">
-      <button onClick={close}>Cancel</button>
-      <button className="primary" disabled={busy || disabled} onClick={save}>
+    <Toolbar className="dialog-actions" end={<>
+      <Button label="Cancel" text severity="secondary" onClick={close} />
+      <Button className="primary" loading={busy} disabled={busy || disabled} onClick={save}>
         {busy ? "Saving…" : "Save"}
-      </button>
-    </div>
+      </Button>
+    </>} />
   );
 }
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="info">
+    <Card className="info">
       <small>{label}</small>
       <span>{value}</span>
-    </div>
+    </Card>
   );
 }
 function Empty({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <div className="empty-screen">
-      <span className="brand-mark">
-        <Sparkles />
-      </span>
+      {subtitle ? <Message severity="error" text={subtitle} /> : <ProgressSpinner />}
       <h1>{title}</h1>
-      {subtitle && <p>{subtitle}</p>}
     </div>
   );
 }

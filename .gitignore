@@ -18,9 +18,7 @@
 web/node_modules/
 web/dist/
 
-# Embedded generated frontend
-internal/webui/dist/*
-!internal/webui/dist/.placeholder
+# Embedded frontend is committed so Go builds include the current UI.
 
 # IDE
 .idea/
