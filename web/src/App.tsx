@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -28,6 +28,7 @@ import { Divider } from "primereact/divider";
 import { Message } from "primereact/message";
 import { ProgressSpinner } from "primereact/progressspinner";
 import { ConfirmDialog } from "primereact/confirmdialog";
+import { Toast } from "primereact/toast";
 import {
   Bot,
   Columns3,
@@ -172,12 +173,22 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
 }
 const short = (id: string) => id.slice(0, 8).toUpperCase();
 const DateContext = createContext({ timezone: "local", language: "system" });
+type Notify = (severity: "success" | "error", summary: string, detail?: string) => void;
+const NotificationContext = createContext<Notify>(() => {});
+const useNotify = () => useContext(NotificationContext);
+const saveTransition = { appear: true, timeout: { enter: 280, exit: 220 } };
+async function withVisibleLoading<T>(request: Promise<T>): Promise<T> {
+  const [value] = await Promise.all([request, new Promise<void>((resolve) => window.setTimeout(resolve, 350))]);
+  return value;
+}
 function useDateFormat() {
   const { timezone, language } = useContext(DateContext);
   return (value: string) => formatDate(value, timezone, language);
 }
 
 function App() {
+  const toast = useRef<Toast>(null);
+  const notify: Notify = (severity, summary, detail) => toast.current?.show({ severity, summary, detail, life: 4000 });
   const [, tick] = useState(0);
   useEffect(() => {
     const timer = window.setInterval(() => tick((value) => value + 1), 1000);
@@ -222,11 +233,13 @@ function App() {
     } else { link?.remove(); }
   }, [settings.data?.theme, settings.data?.language]);
   const saveSettings = useMutation({
-    mutationFn: (value: ProjectSettings) => api<ProjectSettings>(`/projects/${active}/settings`, { method: "PUT", body: JSON.stringify(value) }),
+    mutationFn: (value: ProjectSettings) => withVisibleLoading(api<ProjectSettings>(`/projects/${active}/settings`, { method: "PUT", body: JSON.stringify(value) })),
     onSuccess: (value) => {
       qc.setQueryData(["settings", active], value);
       qc.invalidateQueries({ queryKey: ["board", active] });
+      notify("success", t("Settings saved"));
     },
+    onError: (error) => notify("error", t("Save failed"), error.message),
   });
   const workers = useQuery({
       queryKey: ["workers", active],
@@ -309,7 +322,9 @@ function App() {
       </main>
     );
   return (
+    <NotificationContext.Provider value={notify}>
     <DateContext.Provider value={{ timezone: settings.data?.timezone || "local", language: settings.data?.language || "system" }}>
+    <Toast ref={toast} position="top-right" />
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
@@ -458,6 +473,7 @@ function App() {
       {searchOpen && <SearchTasks tasks={allTasks} onOpen={(id) => { setSearchOpen(false); setSelected(id); }} close={() => setSearchOpen(false)} />}
     </div>
     </DateContext.Provider>
+    </NotificationContext.Provider>
   );
 }
 function FilterBar({
@@ -540,11 +556,10 @@ function matches(t: Task, f: any) {
 }
 function SearchTasks({ tasks, onOpen, close }: { tasks: Task[]; onOpen: (id: string) => void; close: () => void }) {
   const [query, setQuery] = useState("");
-  const [visible, setVisible] = useState(false);
-  useEffect(() => { const frame = requestAnimationFrame(() => setVisible(true)); return () => cancelAnimationFrame(frame); }, []);
+  const [visible, setVisible] = useState(true);
   const [pendingID, setPendingID] = useState<string>();
   const results = tasks.filter((task) => `${task.ID} ${task.Title} ${task.Description} ${task.AssigneeName}`.toLocaleLowerCase().includes(query.toLocaleLowerCase().trim()));
-  return <Dialog header={t("Search tasks")} visible={visible} onHide={() => setVisible(false)} transitionOptions={{ timeout: 250, onExited: () => pendingID ? onOpen(pendingID) : close() }} modal blockScroll draggable={false} className="search-dialog" style={{ width: "90vw", height: "90vh" }}>
+  return <Dialog header={t("Search tasks")} visible={visible} onHide={() => setVisible(false)} transitionOptions={{ ...saveTransition, onExited: () => pendingID ? onOpen(pendingID) : close() }} modal blockScroll draggable={false} className="search-dialog" style={{ width: "90vw", height: "90vh" }}>
     <div className="search-dialog-body">
       <div className="search-dialog-input"><Search size={19} /><InputText autoFocus placeholder={t("Search by title, description, ID or worker")} aria-label={t("Search all tasks")} value={query} onChange={(e) => setQuery(e.target.value)} /></div>
       <p>{results.length} {t(results.length === 1 ? "task" : "tasks")}</p>
@@ -726,6 +741,7 @@ function TaskForm({
   close: () => void;
   refresh: () => void;
 }) {
+  const notify = useNotify();
   const [saved, setSaved] = useState(false);
   const definitions = useQuery({
       queryKey: ["properties", projectID],
@@ -751,7 +767,7 @@ function TaskForm({
     }),
     save = useMutation({
       mutationFn: () =>
-        api(`/projects/${projectID}/tasks`, {
+        withVisibleLoading(api(`/projects/${projectID}/tasks`, {
           method: "POST",
           body: JSON.stringify({
             ...form,
@@ -765,12 +781,18 @@ function TaskForm({
                   : undefined,
             },
           }),
-        }),
+        })),
       onSuccess: () => {
         refresh();
+        notify("success", t("Task saved"));
         setSaved(true);
       },
+      onError: (error) => notify("error", t("Save failed"), error.message),
     });
+  if (!definitions.data || !board.data) {
+    const error = definitions.error || board.error;
+    return error ? <Modal title={t("Create task")} close={close}><Message severity="error" text={error.message} /></Modal> : null;
+  }
   return (
     <Modal title={t("Create task")} close={close} closing={saved}>
       <div className="form-grid">
@@ -916,7 +938,7 @@ function TaskDrawer({
 }) {
   const date = useDateFormat();
   const [editing, setEditing] = useState(false),
-    [visible, setVisible] = useState(false),
+    [closed, setClosed] = useState(false),
     qc = useQueryClient(),
     q = useQuery({
       queryKey: ["task", id],
@@ -947,16 +969,16 @@ function TaskDrawer({
         }),
       onSuccess: reload,
     });
-  useEffect(() => { const frame = requestAnimationFrame(() => setVisible(true)); return () => cancelAnimationFrame(frame); }, []);
+  const visible = !closed && !!(q.data || q.error);
   if (!q.data)
     return (
-      <Sidebar visible={visible} onHide={() => setVisible(false)} transitionOptions={{ timeout: 250, onExited: close }} position="right" className="task-sidebar">
+      <Sidebar visible={visible} onHide={() => setClosed(true)} transitionOptions={{ ...saveTransition, onExited: close }} position="right" className="task-sidebar">
         {q.error ? <Message severity="error" text={q.error.message} /> : <ProgressSpinner />}
       </Sidebar>
     );
   const t = q.data;
   return (
-    <Sidebar visible={visible} onHide={() => setVisible(false)} transitionOptions={{ timeout: 250, onExited: close }} position="right" className="task-sidebar" showCloseIcon={false} blockScroll>
+    <Sidebar visible={visible} onHide={() => setClosed(true)} transitionOptions={{ ...saveTransition, onExited: close }} position="right" className="task-sidebar" showCloseIcon={false} blockScroll>
       <aside className="drawer">
         <div className="drawer-header">
           <div className="drawer-key">
@@ -967,7 +989,7 @@ function TaskDrawer({
             <Button
               className="icon-button"
               aria-label={translate("Close task")}
-              onClick={() => setVisible(false)}
+              onClick={() => setClosed(true)}
             >
               <X />
             </Button>
@@ -1071,6 +1093,7 @@ function TaskEditForm({
   close: () => void;
   refresh: () => void;
 }) {
+  const notify = useNotify();
   const [saved, setSaved] = useState(false);
   const definitions = useQuery({
       queryKey: ["properties", task.ProjectID],
@@ -1095,18 +1118,24 @@ function TaskEditForm({
   });
   const save = useMutation({
       mutationFn: () =>
-        api(`/tasks/${task.ID}`, {
+        withVisibleLoading(api(`/tasks/${task.ID}`, {
           method: "PATCH",
           body: JSON.stringify(form),
-        }),
+        })),
       onSuccess: () => {
         refresh();
+        notify("success", t("Task saved"));
         setSaved(true);
       },
+      onError: (error) => notify("error", t("Save failed"), error.message),
     }),
     allTasks = Object.values(board.data || {})
       .flat()
       .filter((t) => t.ID !== task.ID);
+  if (!definitions.data || !board.data) {
+    const error = definitions.error || board.error;
+    return error ? <Modal title={t("Edit task")} close={close}><Message severity="error" text={error.message} /></Modal> : null;
+  }
   return (
     <Modal title={t("Edit task")} close={close} closing={saved}>
       <div className="form-grid">
@@ -1398,6 +1427,7 @@ function PropertyForm({
   close: () => void;
   refresh: () => void;
 }) {
+  const notify = useNotify();
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [saved, setSaved] = useState(false);
   const [form, setForm] = useState({
@@ -1411,16 +1441,18 @@ function PropertyForm({
     }),
     save = useMutation({
       mutationFn: () =>
-        api(
+        withVisibleLoading(api(
           property
             ? `/properties/${property.ID}`
             : `/projects/${projectID}/properties`,
           { method: property ? "PATCH" : "POST", body: JSON.stringify(form) },
-        ),
+        )),
       onSuccess: () => {
         refresh();
+        notify("success", t("Property saved"));
         setSaved(true);
       },
+      onError: (error) => notify("error", t("Save failed"), error.message),
     }),
     remove = useMutation({
       mutationFn: () =>
@@ -1528,6 +1560,7 @@ function WorkerForm({
   close: () => void;
   refresh: () => void;
 }) {
+  const notify = useNotify();
   const date = useDateFormat();
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -1545,14 +1578,16 @@ function WorkerForm({
     }),
     save = useMutation({
       mutationFn: () =>
-        api(
+        withVisibleLoading(api(
           worker ? `/workers/${worker.ID}` : `/projects/${projectID}/workers`,
           { method: worker ? "PATCH" : "POST", body: JSON.stringify(form) },
-        ),
+        )),
       onSuccess: () => {
         refresh();
+        notify("success", t("Worker saved"));
         setSaved(true);
       },
+      onError: (error) => notify("error", t("Save failed"), error.message),
     }),
     archive = useMutation({
       mutationFn: () => api(`/workers/${worker!.ID}`, { method: "DELETE" }),
@@ -1689,12 +1724,11 @@ function Modal({
   children: React.ReactNode;
   closing?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  useEffect(() => { const frame = requestAnimationFrame(() => setOpen(true)); return () => cancelAnimationFrame(frame); }, []);
+  const [open, setOpen] = useState(true);
   const visible = open && !closing;
   return (
     <ModalCloseContext.Provider value={() => setOpen(false)}>
-      <Dialog header={title} visible={visible} onHide={() => setOpen(false)} transitionOptions={{ timeout: 250, onExited: close }} modal blockScroll draggable={false}
+      <Dialog header={title} visible={visible} onHide={() => setOpen(false)} transitionOptions={{ ...saveTransition, onExited: close }} modal blockScroll draggable={false}
         className="form-dialog" style={{ width: "min(760px, calc(100vw - 24px))" }}>
         {children}
       </Dialog>

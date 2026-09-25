@@ -242,16 +242,21 @@ body { min-width: 320px; }
 .detail-tab-content { animation: tab-enter .22s ease both; min-width: 0; }
 .detail-tabs .p-menuitem-link { transition: color .2s, background .2s; }
 @keyframes tab-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-.form-dialog.p-dialog-enter-active, .search-dialog.p-dialog-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: opacity .25s ease, transform .25s ease; }
-.form-dialog.p-dialog-enter, .search-dialog.p-dialog-enter { opacity: 0; transform: translateY(14px) scale(.98); }
-.form-dialog.p-dialog-exit-active, .search-dialog.p-dialog-exit-active { opacity: 0; transform: translateY(12px) scale(.98); transition: opacity .25s ease, transform .25s ease; }
+.form-dialog.p-dialog-appear, .form-dialog.p-dialog-enter,
+.search-dialog.p-dialog-appear, .search-dialog.p-dialog-enter { opacity: 0; transform: translateY(18px) scale(.97); }
+.form-dialog.p-dialog-appear-active, .form-dialog.p-dialog-enter-active,
+.search-dialog.p-dialog-appear-active, .search-dialog.p-dialog-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: opacity .28s ease-out, transform .28s cubic-bezier(.2,.8,.2,1); }
+.form-dialog.p-dialog-exit-active, .search-dialog.p-dialog-exit-active { opacity: 0; transform: translateY(10px) scale(.98); transition: opacity .22s ease-in, transform .22s ease-in; }
+.p-dialog-mask.p-dialog-visible, .p-sidebar-mask.p-sidebar-visible { animation: overlay-fade-in .28s ease-out both; }
+.p-dialog-mask:has(.p-dialog-exit-active), .p-sidebar-mask:has(.p-sidebar-exit-active) { opacity: 0; transition: opacity .22s ease-in; }
+@keyframes overlay-fade-in { from { opacity: 0; } to { opacity: 1; } }
 .p-dropdown-panel.p-connected-overlay-enter, .p-multiselect-panel.p-connected-overlay-enter { opacity: 0; transform: translateY(-7px) scale(.98); }
 .p-dropdown-panel.p-connected-overlay-enter-active, .p-multiselect-panel.p-connected-overlay-enter-active { opacity: 1; transform: translateY(0) scale(1); transition: opacity .18s ease, transform .18s ease; }
 .p-dropdown-panel.p-connected-overlay-exit-active, .p-multiselect-panel.p-connected-overlay-exit-active { opacity: 0; transform: translateY(-7px) scale(.98); transition: opacity .18s ease, transform .18s ease; }
-.task-sidebar.p-sidebar { transition: transform .28s ease, opacity .28s ease; }
-.task-sidebar.p-sidebar-enter { opacity: 0; transform: translateX(22px); }
-.task-sidebar.p-sidebar-enter-active { opacity: 1; transform: translateX(0); }
-.task-sidebar.p-sidebar-exit-active { opacity: 0; transform: translateX(22px); }
+.task-sidebar.p-sidebar-appear, .task-sidebar.p-sidebar-enter { opacity: 0; transform: translateX(40px); }
+.task-sidebar.p-sidebar-appear-active, .task-sidebar.p-sidebar-enter-active { opacity: 1; transform: translateX(0); transition: transform .28s cubic-bezier(.2,.8,.2,1), opacity .28s ease-out; }
+.task-sidebar.p-sidebar-exit-active { opacity: 0; transform: translateX(40px); transition: transform .22s ease-in, opacity .22s ease-in; }
+.p-toast.p-toast-top-right { z-index: 12000 !important; }
 .app-shell > main > :is(.workers-page, .settings-page, .import-page) { animation: tab-enter .22s ease both; }
 .app-shell > main > .filters { animation: tab-enter .22s ease both; }
 .sidebar nav .p-button { transition: background .2s ease, color .2s ease, transform .2s ease; }
@@ -288,4 +293,4 @@ body { min-width: 320px; }
 .import-panel pre { max-height: 400px; overflow: auto; padding: 14px; background: #101722; border: 1px solid var(--line); border-radius: 8px; font-size: 11px; }
 .import-panel code { color: #b9b4ff; }
 @media (max-width: 900px) { .import-grid { grid-template-columns: 1fr; } }
-@media (prefers-reduced-motion: reduce) { .board, .task-sidebar.p-sidebar, .detail-tab-content, .form-dialog.p-dialog, .search-dialog.p-dialog, .p-dropdown-panel, .p-multiselect-panel, .language-menu, .sidebar nav .p-button { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+@media (prefers-reduced-motion: reduce) { .board, .task-sidebar.p-sidebar, .detail-tab-content, .form-dialog.p-dialog, .search-dialog.p-dialog, .p-dialog-mask, .p-sidebar-mask, .p-dropdown-panel, .p-multiselect-panel, .language-menu, .sidebar nav .p-button { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
