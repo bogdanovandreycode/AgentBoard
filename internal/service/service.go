@@ -171,10 +171,13 @@ func (s *Service) CreateFeature(ctx context.Context, a core.AgentContext, in cor
 		}
 	}
 	for name, value := range in.SuggestedProperties {
-		var propertyID string
-		err = tx.QueryRowContext(ctx, `SELECT id FROM property_definitions WHERE project_id=? AND name=? AND visibility='agent_read_write'`, a.Project.ID, name).Scan(&propertyID)
+		var propertyID, kind, options, pattern string
+		err = tx.QueryRowContext(ctx, `SELECT id,type,options,regex FROM property_definitions WHERE project_id=? AND name=? AND visibility='agent_read_write'`, a.Project.ID, name).Scan(&propertyID, &kind, &options, &pattern)
 		if err == nil {
-			_, err = tx.ExecContext(ctx, `INSERT INTO task_property_values(task_id,property_definition_id,value,updated_at) VALUES(?,?,?,?)`, t.ID, propertyID, value, now)
+			if !validPropertyValue(kind, options, pattern, value) {
+				return t, core.ErrInvalidInput
+			}
+			_, err = tx.ExecContext(ctx, `INSERT INTO task_property_values(task_id,property_definition_id,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(task_id,property_definition_id) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`, t.ID, propertyID, value, now)
 		}
 		if err != nil && err != sql.ErrNoRows {
 			return t, err
@@ -349,7 +352,9 @@ func (s *Service) HumanMove(ctx context.Context, taskID, target string) (core.Ta
 		return t, err
 	}
 	from := t.State
-	if t.BoardColumn != "" { from = t.BoardColumn }
+	if t.BoardColumn != "" {
+		from = t.BoardColumn
+	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO history_entries(id,task_id,actor_type,entry_type,content,created_at) VALUES(?,?,?,?,?,?)`, id(), taskID, "system", "state_transition", fmt.Sprintf("State changed by Human: %s → %s", from, target), now)
 	if err != nil {
 		return t, err
@@ -368,17 +373,25 @@ func (s *Service) HumanBoard(ctx context.Context, projectID string) (core.Board,
 	b := core.Board{"backlog": {}, "features": {}, "in_progress": {}, "testing": {}, "verification": {}, "complete": {}}
 	for i := range tasks {
 		tasks[i].Dependencies, _ = s.ListDependencies(ctx, tasks[i].ID)
+		tasks[i].Properties, _ = s.ListTaskProperties(ctx, tasks[i].ID, false)
 		column := tasks[i].State
-		if tasks[i].BoardColumn != "" { column = tasks[i].BoardColumn }
+		if tasks[i].BoardColumn != "" {
+			column = tasks[i].BoardColumn
+		}
 		b[column] = append(b[column], tasks[i])
 	}
 	return b, nil
 }
 
 func (s *Service) HumanCreateTask(ctx context.Context, projectID string, in core.TaskInput) (core.Task, error) {
+	if err := s.validatePropertyValues(ctx, projectID, in.Properties, false); err != nil {
+		return core.Task{}, err
+	}
 	if in.BoardColumn != "" {
 		state, boardColumn, err := s.resolveHumanColumn(ctx, projectID, in.BoardColumn)
-		if err != nil || boardColumn == "" { return core.Task{}, core.ErrInvalidInput }
+		if err != nil || boardColumn == "" {
+			return core.Task{}, core.ErrInvalidInput
+		}
 		in.State, in.BoardColumn = state, boardColumn
 	}
 	if in.Assignee.Type == "" {
@@ -416,6 +429,11 @@ func (s *Service) HumanUpdateTask(ctx context.Context, taskID string, in core.Ta
 	t, err := s.Store.GetTask(ctx, taskID)
 	if err != nil {
 		return t, err
+	}
+	if in.Properties != nil {
+		if err = s.validatePropertyValues(ctx, t.ProjectID, *in.Properties, false); err != nil {
+			return t, err
+		}
 	}
 	if in.Title != nil {
 		t.Title = *in.Title

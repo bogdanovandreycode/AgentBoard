@@ -44,6 +44,8 @@ import {
 } from "lucide-react";
 import { WorkerDiagnostics } from "./WorkerDiagnostics";
 import { SelectField } from "./SelectField";
+import { PropertyField } from "./PropertyField";
+import { propertyDisplay, type PropertyDef } from "./propertyUtils";
 import { MarkdownField, MarkdownView } from "./MarkdownField";
 import { capabilityPresets, relativeTime } from "./workerPresentation";
 import { SettingsPage } from "./SettingsPage";
@@ -72,13 +74,6 @@ type Worker = {
   SessionCount: number;
   MCPCalls: number;
   LastActivityAt?: string;
-};
-type PropertyDef = {
-  ID: string;
-  Name: string;
-  Type: string;
-  Options: string;
-  Visibility: string;
 };
 type Artifact = {
   ID: string;
@@ -153,6 +148,7 @@ type Task = {
   AITestInstructions: string;
   HumanTestInstructions: string;
   Dependencies: Dependency[];
+  Properties?: { PropertyDefinitionID: string; Name: string; Type: string; Value: string }[];
 };
 type Details = Task & {
   History: History[];
@@ -160,7 +156,7 @@ type Details = Task & {
   Artifacts: Artifact[];
   Usage: Usage[];
   SpawnedTasks: Task[];
-  Properties: { PropertyDefinitionID: string; Name: string; Value: string }[];
+  Properties: { PropertyDefinitionID: string; Name: string; Type: string; Value: string }[];
 };
 type Board = Record<string, Task[]>;
 async function api<T>(url: string, options?: RequestInit): Promise<T> {
@@ -334,8 +330,10 @@ function App() {
             </option>
           ))}
         </SelectField>
-        <Button onClick={() => selectProject("")}>{t("All projects")}</Button>
         <nav>
+          <Button className="all-projects-link" onClick={() => selectProject("")}>
+            <Columns3 />{t("All projects")}
+          </Button>
           <Button
             className={tab === "board" ? "active" : ""}
             onClick={() => setTab("board")}
@@ -417,7 +415,7 @@ function App() {
                   />
                 ))}
               </div></div>
-              <DragOverlay dropAnimation={null} zIndex={10000}>{draggedTask && <div className="task-drag-overlay"><div className="task-key">{short(draggedTask.ID)}</div><h3>{draggedTask.Title}</h3><p>{draggedTask.Description}</p></div>}</DragOverlay>
+              <DragOverlay dropAnimation={null} zIndex={10000}>{draggedTask && <div className="task-drag-overlay"><div className="task-key">{short(draggedTask.ID)}</div><h3>{draggedTask.Title}</h3>{draggedTask.Description && <p>{draggedTask.Description}</p>}{!!draggedTask.Properties?.length && <div className="card-properties">{draggedTask.Properties.slice(0, 2).map((property) => <span key={property.PropertyDefinitionID}><b>{property.Name}:</b> {propertyDisplay(property, property.Value)}</span>)}</div>}<div className="badges"><Tag value={t(draggedTask.Priority)} severity="info" /><Tag value={t(draggedTask.TestingMode === "ai" ? "AI" : draggedTask.TestingMode === "human" ? "Human" : "Hybrid")} severity="secondary" /></div><div className="card-footer"><span className="assignee">{draggedTask.AssigneeName || t(draggedTask.AssigneeType)}</span><span className="origin">{draggedTask.CreatedByType === "agent" ? `AI · ${draggedTask.CreatorName}` : t("Human")}</span></div><small>{t("Updated")} {relativeTime(draggedTask.UpdatedAt)}</small></div>}</DragOverlay>
             </DndContext>
             {move.error && <Message severity="error" text={move.error.message} className="action-error" />}
           </>
@@ -542,7 +540,8 @@ function matches(t: Task, f: any) {
 }
 function SearchTasks({ tasks, onOpen, close }: { tasks: Task[]; onOpen: (id: string) => void; close: () => void }) {
   const [query, setQuery] = useState("");
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => { const frame = requestAnimationFrame(() => setVisible(true)); return () => cancelAnimationFrame(frame); }, []);
   const [pendingID, setPendingID] = useState<string>();
   const results = tasks.filter((task) => `${task.ID} ${task.Title} ${task.Description} ${task.AssigneeName}`.toLocaleLowerCase().includes(query.toLocaleLowerCase().trim()));
   return <Dialog header={t("Search tasks")} visible={visible} onHide={() => setVisible(false)} transitionOptions={{ timeout: 250, onExited: () => pendingID ? onOpen(pendingID) : close() }} modal blockScroll draggable={false} className="search-dialog" style={{ width: "90vw", height: "90vh" }}>
@@ -678,6 +677,9 @@ function TaskCard({
       <div className="task-key">{short(task.ID)}</div>
       <h3>{task.Title}</h3>
       {task.Description && <p>{task.Description}</p>}
+      {!!task.Properties?.length && <div className="card-properties">{task.Properties.slice(0, 2).map((property) =>
+        <span key={property.PropertyDefinitionID}><b>{property.Name}:</b> {propertyDisplay(property, property.Value)}</span>
+      )}</div>}
       <div className="badges">
         <Tag value={t(task.Priority)} severity={task.Priority === "critical" ? "danger" : task.Priority === "high" ? "warning" : task.Priority === "low" ? "secondary" : "info"} />
         <Tag value={t(task.TestingMode === "ai" ? "AI" : task.TestingMode === "human" ? "Human" : "Hybrid")} icon="pi pi-check-square" severity="secondary" />
@@ -874,15 +876,8 @@ function TaskForm({
         {definitions.data?.map((d) => (
           <label key={d.ID}>
             {d.Name}
-            <InputText
-              value={form.Properties[d.ID] || ""}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  Properties: { ...form.Properties, [d.ID]: e.target.value },
-                })
-              }
-            />
+            <PropertyField definition={d} value={form.Properties[d.ID] ?? d.DefaultValue}
+              onChange={(value) => setForm({ ...form, Properties: { ...form.Properties, [d.ID]: value } })} />
             <small>{d.Visibility.replaceAll("_", " ")}</small>
           </label>
         ))}
@@ -921,7 +916,7 @@ function TaskDrawer({
 }) {
   const date = useDateFormat();
   const [editing, setEditing] = useState(false),
-    [visible, setVisible] = useState(true),
+    [visible, setVisible] = useState(false),
     qc = useQueryClient(),
     q = useQuery({
       queryKey: ["task", id],
@@ -952,6 +947,7 @@ function TaskDrawer({
         }),
       onSuccess: reload,
     });
+  useEffect(() => { const frame = requestAnimationFrame(() => setVisible(true)); return () => cancelAnimationFrame(frame); }, []);
   if (!q.data)
     return (
       <Sidebar visible={visible} onHide={() => setVisible(false)} transitionOptions={{ timeout: 250, onExited: close }} position="right" className="task-sidebar">
@@ -1013,6 +1009,11 @@ function TaskDrawer({
           <Info label={translate("Testing")} value={translate(t.TestingMode === "ai" ? "AI" : t.TestingMode === "human" ? "Human" : "Hybrid")} />
         </div>
         {assign.error && <Message severity="error" text={assign.error.message} className="action-error" />}
+        {!!t.Properties?.length && <Panel className="detail-panel" header={translate("Properties")}>
+          <div className="task-properties">{t.Properties.map((property) =>
+            <div key={property.PropertyDefinitionID}><strong>{property.Name}</strong><span>{propertyDisplay(property, property.Value)}</span></div>
+          )}</div>
+        </Panel>}
         <Panel className="detail-panel" header={translate("Test instructions")}>
           <div className="instruction">
             <Tag value="AI" severity="info" />
@@ -1168,15 +1169,8 @@ function TaskEditForm({
         {definitions.data?.map((d) => (
           <label key={d.ID}>
             {d.Name}
-            <InputText
-              value={form.Properties[d.ID] || ""}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  Properties: { ...form.Properties, [d.ID]: e.target.value },
-                })
-              }
-            />
+            <PropertyField definition={d} value={form.Properties[d.ID] ?? d.DefaultValue}
+              onChange={(value) => setForm({ ...form, Properties: { ...form.Properties, [d.ID]: value } })} />
             <small>{d.Visibility.replaceAll("_", " ")}</small>
           </label>
         ))}
@@ -1411,6 +1405,9 @@ function PropertyForm({
       Type: property?.Type || "text",
       Options: property?.Options || "[]",
       Visibility: property?.Visibility || "agent_read",
+      Placeholder: property?.Placeholder || "",
+      Regex: property?.Regex || "",
+      DefaultValue: property?.DefaultValue || "",
     }),
     save = useMutation({
       mutationFn: () =>
@@ -1484,6 +1481,10 @@ function PropertyForm({
             />
           </label>
         )}
+        <label>{t("Placeholder")}<InputText value={form.Placeholder} onChange={(e) => setForm({ ...form, Placeholder: e.target.value })} /></label>
+        <label>{t("Regex")}<InputText className="mono" value={form.Regex} onChange={(e) => setForm({ ...form, Regex: e.target.value })} /></label>
+        <label className="wide">{t("Default value")}<PropertyField definition={{ ...form, ID: property?.ID || "" }} value={form.DefaultValue}
+          onChange={(value) => setForm({ ...form, DefaultValue: value })} /></label>
       </div>
       {save.error && <Message severity="error" text={save.error.message} className="action-error" />}
       {remove.error && <Message severity="error" text={remove.error.message} className="action-error" />}
@@ -1688,7 +1689,8 @@ function Modal({
   children: React.ReactNode;
   closing?: boolean;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
+  useEffect(() => { const frame = requestAnimationFrame(() => setOpen(true)); return () => cancelAnimationFrame(frame); }, []);
   const visible = open && !closing;
   return (
     <ModalCloseContext.Provider value={() => setOpen(false)}>

@@ -124,6 +124,9 @@ func (s *Service) HumanImportTasks(ctx context.Context, projectID string, doc Im
 				return 0, fmt.Errorf("%w: task %d has unknown property %q", core.ErrInvalidInput, i+1, name)
 			}
 		}
+		if err := s.validatePropertyValues(ctx, projectID, task.Properties, true); err != nil {
+			return 0, fmt.Errorf("%w: task %d has invalid property value", err, i+1)
+		}
 		for _, dependency := range task.DependsOn {
 			if _, ok := keys[dependency]; !ok || dependency == task.Key {
 				return 0, fmt.Errorf("%w: task %d has invalid dependency %q", core.ErrInvalidInput, i+1, dependency)
@@ -151,7 +154,7 @@ func (s *Service) HumanImportTasks(ctx context.Context, projectID string, doc Im
 			return 0, err
 		}
 		for name, value := range task.Properties {
-			_, err = tx.ExecContext(ctx, `INSERT INTO task_property_values(task_id,property_definition_id,value,updated_at) VALUES(?,?,?,?)`, ids[i], propertyIDs[name], value, now)
+			_, err = tx.ExecContext(ctx, `INSERT INTO task_property_values(task_id,property_definition_id,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(task_id,property_definition_id) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`, ids[i], propertyIDs[name], value, now)
 			if err != nil {
 				return 0, err
 			}

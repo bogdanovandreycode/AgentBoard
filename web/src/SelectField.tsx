@@ -6,6 +6,7 @@ import { t } from "./i18n";
 type Props = Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & {
   children: ReactNode;
   onChange?: (event: ChangeEvent<HTMLSelectElement>) => void;
+  filter?: boolean;
 };
 
 function textFrom(children: ReactNode): string {
@@ -26,7 +27,7 @@ function optionsFrom(children: ReactNode): { label: string; value: string }[] {
   });
 }
 
-export function SelectField({ children, value, onChange, multiple, className, disabled, ...props }: Props) {
+export function SelectField({ children, value, onChange, multiple, className, disabled, filter, ...props }: Props) {
   const options = optionsFrom(children);
   const change = (next: string | string[]) => {
     onChange?.({
@@ -38,8 +39,10 @@ export function SelectField({ children, value, onChange, multiple, className, di
   };
   if (multiple) {
     return <MultiSelect value={value || []} options={options} onChange={(event) => change(event.value || [])}
-      className={className} disabled={disabled} display="chip" filter placeholder={t("Choose dependencies")} />;
+      className={className} disabled={disabled} display="chip" filter placeholder={t("Choose dependencies")}
+      transitionOptions={{ timeout: 180 }} />;
   }
   return <Dropdown value={value} options={options} onChange={(event) => change(event.value)}
-    className={className} disabled={disabled} aria-label={props["aria-label"]} />;
+    className={className} disabled={disabled} filter={filter} aria-label={props["aria-label"]}
+    transitionOptions={{ timeout: 180 }} />;
 }

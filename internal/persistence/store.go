@@ -27,6 +27,9 @@ var sessionActivityMigration string
 //go:embed migrations/004_board_settings.sql
 var boardSettingsMigration string
 
+//go:embed migrations/005_property_fields.sql
+var propertyFieldsMigration string
+
 type Store struct{ DB *sql.DB }
 
 func DefaultDBPath() string {
@@ -96,17 +99,53 @@ func Open(path string) (*Store, error) {
 	// Keep the schema change atomic when the HTTP and MCP processes open the
 	// same database at the same time.
 	tx, err = db.Begin()
-	if err != nil { db.Close(); return nil, err }
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
 	if _, err = tx.Exec("UPDATE schema_migrations SET version=version WHERE version=1"); err == nil {
 		var count int
 		err = tx.QueryRow("SELECT count(*) FROM schema_migrations WHERE version=4").Scan(&count)
 		if err == nil && count == 0 {
 			_, err = tx.Exec(boardSettingsMigration)
-			if err == nil { _, err = tx.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(4,?)", core.Now()) }
+			if err == nil {
+				_, err = tx.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(4,?)", core.Now())
+			}
 		}
 	}
-	if err != nil { tx.Rollback(); db.Close(); return nil, fmt.Errorf("migrate v4: %w", err) }
-	if err = tx.Commit(); err != nil { db.Close(); return nil, err }
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		return nil, fmt.Errorf("migrate v4: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	tx, err = db.Begin()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err = tx.Exec("UPDATE schema_migrations SET version=version WHERE version=1"); err == nil {
+		var count int
+		err = tx.QueryRow("SELECT count(*) FROM schema_migrations WHERE version=5").Scan(&count)
+		if err == nil && count == 0 {
+			_, err = tx.Exec(propertyFieldsMigration)
+			if err == nil {
+				_, err = tx.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(5,?)", core.Now())
+			}
+		}
+	}
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		return nil, fmt.Errorf("migrate v5: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Store{DB: db}, nil
 }
 
@@ -175,7 +214,9 @@ func (s *Store) CreateWorker(ctx context.Context, projectID string, in core.Work
 	if in.Kind == "" {
 		in.Kind = "external"
 	}
-	if in.Harness == "" { in.Harness = "custom" }
+	if in.Harness == "" {
+		in.Harness = "custom"
+	}
 	if in.Capabilities == "" {
 		in.Capabilities = "{}"
 	}
@@ -240,7 +281,9 @@ func (s *Store) UpdateWorker(ctx context.Context, id string, in core.WorkerInput
 	if in.Kind == "" {
 		in.Kind = "external"
 	}
-	if in.Harness == "" { in.Harness = "custom" }
+	if in.Harness == "" {
+		in.Harness = "custom"
+	}
 	if in.Capabilities == "" {
 		in.Capabilities = "{}"
 	}
@@ -320,7 +363,7 @@ func (s *Store) CreateTask(ctx context.Context, projectID string, in core.TaskIn
 		if err = tx.QueryRowContext(ctx, `SELECT id FROM property_definitions WHERE id=? AND project_id=?`, propertyID, projectID).Scan(&pid); err != nil {
 			return t, core.ErrInvalidInput
 		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO task_property_values(task_id,property_definition_id,value,updated_at) VALUES(?,?,?,?)`, t.ID, pid, value, now); err != nil {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO task_property_values(task_id,property_definition_id,value,updated_at) VALUES(?,?,?,?) ON CONFLICT(task_id,property_definition_id) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at`, t.ID, pid, value, now); err != nil {
 			return t, err
 		}
 	}

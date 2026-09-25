@@ -20,10 +20,14 @@ export const lockedColumns = new Set(["features", "in_progress", "testing", "ver
 
 export function formatDate(value: string, timezone = "local", language = "system") {
   try {
+    const date = moment(value);
+    if (!date.isValid()) return value;
+    const zoned = timezone === "local" ? date.local() : date.tz(timezone);
     return new Intl.DateTimeFormat(language === "system" ? undefined : language, {
-      dateStyle: "medium", timeStyle: "short", ...(timezone === "local" ? {} : { timeZone: timezone }),
-    }).format(new Date(value));
+      dateStyle: "medium", timeStyle: "short", timeZone: timezone === "local" ? undefined : timezone,
+    }).format(zoned.toDate());
   } catch {
     return new Date(value).toLocaleString();
   }
 }
+import moment from "moment-timezone";

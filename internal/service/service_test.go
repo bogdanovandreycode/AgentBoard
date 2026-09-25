@@ -217,3 +217,42 @@ func TestCustomPropertyVisibility(t *testing.T) {
 		t.Fatalf("human properties: %#v", human.Properties)
 	}
 }
+
+func TestPropertyDefaultsAndValidation(t *testing.T) {
+	f := setup(t)
+	definition, err := f.svc.CreatePropertyDefinition(f.ctx, f.project.ID, core.PropertyDefinitionInput{
+		Name: "Ticket", Type: "text", Visibility: "agent_read", Placeholder: "ABC-123", Regex: `^[A-Z]+-[0-9]+$`, DefaultValue: "ABC-123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if definition.Placeholder != "ABC-123" || definition.Regex == "" {
+		t.Fatalf("definition fields: %#v", definition)
+	}
+	task, err := f.svc.HumanCreateTask(f.ctx, f.project.ID, core.TaskInput{Title: "Default", State: "backlog", Assignee: core.Assignee{Type: "unassigned"}, TestingMode: "ai"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	details, err := f.svc.HumanTask(f.ctx, task.ID)
+	if err != nil || len(details.Properties) != 1 || details.Properties[0].Value != "ABC-123" {
+		t.Fatalf("default value: %#v, %v", details.Properties, err)
+	}
+	invalid := map[string]string{definition.ID: "wrong"}
+	if _, err = f.svc.HumanUpdateTask(f.ctx, task.ID, core.TaskUpdate{Properties: &invalid}); !errors.Is(err, core.ErrInvalidInput) {
+		t.Fatalf("invalid update: %v", err)
+	}
+	if _, err = f.svc.HumanCreateTask(f.ctx, f.project.ID, core.TaskInput{Title: "Invalid", State: "backlog", Assignee: core.Assignee{Type: "unassigned"}, TestingMode: "ai", Properties: invalid}); !errors.Is(err, core.ErrInvalidInput) {
+		t.Fatalf("invalid create: %v", err)
+	}
+	valid := map[string]string{definition.ID: "XYZ-9"}
+	if _, err = f.svc.HumanUpdateTask(f.ctx, task.ID, core.TaskUpdate{Properties: &valid}); err != nil {
+		t.Fatal(err)
+	}
+	details, err = f.svc.HumanTask(f.ctx, task.ID)
+	if err != nil || details.Properties[0].Value != "XYZ-9" {
+		t.Fatalf("updated value: %#v, %v", details.Properties, err)
+	}
+	if _, err = f.svc.CreatePropertyDefinition(f.ctx, f.project.ID, core.PropertyDefinitionInput{Name: "Broken", Type: "text", Visibility: "human_only", Regex: "["}); !errors.Is(err, core.ErrInvalidInput) {
+		t.Fatalf("invalid regex: %v", err)
+	}
+}

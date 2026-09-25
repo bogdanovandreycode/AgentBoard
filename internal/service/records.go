@@ -3,7 +3,13 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"net/url"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/bogdanovandreycode/agentboard/internal/core"
 )
@@ -182,7 +188,7 @@ func (s *Service) ListTaskProperties(ctx context.Context, taskID string, agentVi
 }
 
 func (s *Service) ListPropertyDefinitions(ctx context.Context, projectID string) ([]core.PropertyDefinition, error) {
-	rows, err := s.Store.DB.QueryContext(ctx, `SELECT id,project_id,name,type,options,visibility,created_at,updated_at FROM property_definitions WHERE project_id=? ORDER BY name`, projectID)
+	rows, err := s.Store.DB.QueryContext(ctx, `SELECT id,project_id,name,type,options,visibility,created_at,updated_at,placeholder,regex,default_value FROM property_definitions WHERE project_id=? ORDER BY name`, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +196,7 @@ func (s *Service) ListPropertyDefinitions(ctx context.Context, projectID string)
 	var out []core.PropertyDefinition
 	for rows.Next() {
 		var d core.PropertyDefinition
-		if err = rows.Scan(&d.ID, &d.ProjectID, &d.Name, &d.Type, &d.Options, &d.Visibility, &d.CreatedAt, &d.UpdatedAt); err != nil {
+		if err = rows.Scan(&d.ID, &d.ProjectID, &d.Name, &d.Type, &d.Options, &d.Visibility, &d.CreatedAt, &d.UpdatedAt, &d.Placeholder, &d.Regex, &d.DefaultValue); err != nil {
 			return nil, err
 		}
 		out = append(out, d)
@@ -202,11 +208,11 @@ func (s *Service) CreatePropertyDefinition(ctx context.Context, projectID string
 		return core.PropertyDefinition{}, err
 	}
 	now := core.Now()
-	d := core.PropertyDefinition{ID: id(), ProjectID: projectID, Name: in.Name, Type: in.Type, Options: in.Options, Visibility: in.Visibility, CreatedAt: now, UpdatedAt: now}
+	d := core.PropertyDefinition{ID: id(), ProjectID: projectID, Name: in.Name, Type: in.Type, Options: in.Options, Visibility: in.Visibility, Placeholder: in.Placeholder, Regex: in.Regex, DefaultValue: in.DefaultValue, CreatedAt: now, UpdatedAt: now}
 	if d.Options == "" {
 		d.Options = "[]"
 	}
-	_, err := s.Store.DB.ExecContext(ctx, `INSERT INTO property_definitions(id,project_id,name,type,options,visibility,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)`, d.ID, d.ProjectID, d.Name, d.Type, d.Options, d.Visibility, now, now)
+	_, err := s.Store.DB.ExecContext(ctx, `INSERT INTO property_definitions(id,project_id,name,type,options,visibility,created_at,updated_at,placeholder,regex,default_value) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, d.ID, d.ProjectID, d.Name, d.Type, d.Options, d.Visibility, now, now, d.Placeholder, d.Regex, d.DefaultValue)
 	return d, err
 }
 func (s *Service) UpdatePropertyDefinition(ctx context.Context, id string, in core.PropertyDefinitionInput) (core.PropertyDefinition, error) {
@@ -216,7 +222,7 @@ func (s *Service) UpdatePropertyDefinition(ctx context.Context, id string, in co
 	if in.Options == "" {
 		in.Options = "[]"
 	}
-	r, err := s.Store.DB.ExecContext(ctx, `UPDATE property_definitions SET name=?,type=?,options=?,visibility=?,updated_at=? WHERE id=?`, in.Name, in.Type, in.Options, in.Visibility, core.Now(), id)
+	r, err := s.Store.DB.ExecContext(ctx, `UPDATE property_definitions SET name=?,type=?,options=?,visibility=?,placeholder=?,regex=?,default_value=?,updated_at=? WHERE id=?`, in.Name, in.Type, in.Options, in.Visibility, in.Placeholder, in.Regex, in.DefaultValue, core.Now(), id)
 	if err != nil {
 		return core.PropertyDefinition{}, err
 	}
@@ -225,7 +231,7 @@ func (s *Service) UpdatePropertyDefinition(ctx context.Context, id string, in co
 		return core.PropertyDefinition{}, core.ErrNotFound
 	}
 	var d core.PropertyDefinition
-	err = s.Store.DB.QueryRowContext(ctx, `SELECT id,project_id,name,type,options,visibility,created_at,updated_at FROM property_definitions WHERE id=?`, id).Scan(&d.ID, &d.ProjectID, &d.Name, &d.Type, &d.Options, &d.Visibility, &d.CreatedAt, &d.UpdatedAt)
+	err = s.Store.DB.QueryRowContext(ctx, `SELECT id,project_id,name,type,options,visibility,created_at,updated_at,placeholder,regex,default_value FROM property_definitions WHERE id=?`, id).Scan(&d.ID, &d.ProjectID, &d.Name, &d.Type, &d.Options, &d.Visibility, &d.CreatedAt, &d.UpdatedAt, &d.Placeholder, &d.Regex, &d.DefaultValue)
 	return d, err
 }
 func (s *Service) DeletePropertyDefinition(ctx context.Context, id string) error {
@@ -244,6 +250,78 @@ func validateDefinition(in core.PropertyDefinitionInput) error {
 	vis := map[string]bool{"human_only": true, "agent_read": true, "agent_read_write": true}
 	if strings.TrimSpace(in.Name) == "" || !types[in.Type] || !vis[in.Visibility] {
 		return core.ErrInvalidInput
+	}
+	if in.Regex != "" {
+		if _, err := regexp.Compile(in.Regex); err != nil {
+			return core.ErrInvalidInput
+		}
+	}
+	if in.Type == "select" || in.Type == "multi_select" {
+		var options []string
+		if in.Options != "" && json.Unmarshal([]byte(in.Options), &options) != nil {
+			return core.ErrInvalidInput
+		}
+	}
+	if in.DefaultValue != "" && !validPropertyValue(in.Type, in.Options, in.Regex, in.DefaultValue) {
+		return core.ErrInvalidInput
+	}
+	return nil
+}
+
+func validPropertyValue(kind, options, pattern, value string) bool {
+	if value == "" {
+		return true
+	}
+	if pattern != "" {
+		re, err := regexp.Compile(pattern)
+		if err != nil || re.FindString(value) != value {
+			return false
+		}
+	}
+	switch kind {
+	case "boolean":
+		return value == "true" || value == "false"
+	case "number":
+		_, err := strconv.ParseFloat(value, 64)
+		return err == nil
+	case "date":
+		_, err := time.Parse("2006-01-02", value)
+		return err == nil
+	case "datetime":
+		_, err := time.Parse(time.RFC3339, value)
+		return err == nil
+	case "url":
+		u, err := url.ParseRequestURI(value)
+		return err == nil && (u.Scheme == "http" || u.Scheme == "https")
+	case "select", "multi_select":
+		var allowed []string
+		if json.Unmarshal([]byte(options), &allowed) != nil {
+			return false
+		}
+		values := []string{value}
+		if kind == "multi_select" && json.Unmarshal([]byte(value), &values) != nil {
+			return false
+		}
+		for _, v := range values {
+			if !slices.Contains(allowed, v) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func (s *Service) validatePropertyValues(ctx context.Context, projectID string, values map[string]string, byName bool) error {
+	for key, value := range values {
+		var kind, options, pattern string
+		column := "id"
+		if byName {
+			column = "name"
+		}
+		err := s.Store.DB.QueryRowContext(ctx, `SELECT type,options,regex FROM property_definitions WHERE project_id=? AND `+column+`=?`, projectID, key).Scan(&kind, &options, &pattern)
+		if err != nil || !validPropertyValue(kind, options, pattern, value) {
+			return core.ErrInvalidInput
+		}
 	}
 	return nil
 }

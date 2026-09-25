@@ -20,7 +20,7 @@ type Project struct {
 
 type Worker struct {
 	ID, ProjectID, Name, Slug, Description, Kind, Capabilities string
-	Harness string
+	Harness                                                    string
 	Enabled, Archived                                          bool
 	CreatedAt, UpdatedAt                                       string
 	AssignedTaskCount                                          int
@@ -37,7 +37,7 @@ type WorkerSession struct {
 
 type Task struct {
 	ID, ProjectID, Title, Description, State, Priority, AssigneeType string
-	BoardColumn string
+	BoardColumn                                                      string
 	Position                                                         float64
 	AssigneeWorkerID, CreatedByWorkerID, CreatedBySessionID          *string
 	CreatedByType                                                    string
@@ -84,6 +84,7 @@ type UsageEvent struct {
 
 type PropertyDefinition struct {
 	ID, ProjectID, Name, Type, Options, Visibility, CreatedAt, UpdatedAt string
+	Placeholder, Regex, DefaultValue                                     string
 }
 
 type TaskPropertyValue struct {
@@ -97,7 +98,7 @@ type Assignee struct {
 
 type TaskInput struct {
 	Title, Description, State, Priority, TestingMode string
-	BoardColumn string
+	BoardColumn                                      string
 	Assignee                                         Assignee
 	AITestInstructions, HumanTestInstructions        string
 	SourceTaskID                                     *string
@@ -116,12 +117,13 @@ type TaskUpdate struct {
 
 type WorkerInput struct {
 	Name, Slug, Description, Kind, Capabilities string
-	Harness string
+	Harness                                     string
 	Enabled                                     bool
 }
 
 type PropertyDefinitionInput struct {
-	Name, Type, Options, Visibility string
+	Name, Type, Options, Visibility  string
+	Placeholder, Regex, DefaultValue string
 }
 
 type FeatureInput struct {

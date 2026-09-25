@@ -6,9 +6,10 @@ import { SelectField } from "./SelectField";
 import { t } from "./i18n";
 import { LanguagePicker } from "./LanguagePicker";
 import { builtInColumns, lockedColumns, type ProjectSettings } from "./settings";
+import moment from "moment-timezone";
 
 const themes = ["dark", "light", "black", "ubuntu", "windows"] as const;
-const commonTimezones = ["local", "UTC", "Europe/Moscow", "Europe/Berlin", "Europe/London", "Europe/Bucharest", "Europe/Sofia", "America/New_York", "America/Los_Angeles", "Asia/Tokyo", "Asia/Shanghai"];
+const timezones = ["local", ...moment.tz.names()];
 
 export function SettingsPage({ value, onSave, saving, error, projectPath }: {
   value: ProjectSettings;
@@ -41,8 +42,9 @@ export function SettingsPage({ value, onSave, saving, error, projectPath }: {
         <label>{t("Color scheme")}<SelectField value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value as ProjectSettings["theme"] })}>
           {themes.map((theme) => <option key={theme} value={theme}>{t(theme[0].toUpperCase() + theme.slice(1))}</option>)}
         </SelectField></label>
-        <label>{t("Time zone")}<InputText list="agentboard-timezones" value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
-          <datalist id="agentboard-timezones">{commonTimezones.map((zone) => <option key={zone} value={zone}>{zone === "local" ? t("System time zone") : zone}</option>)}</datalist>
+        <label>{t("Time zone")}<SelectField filter value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })}>
+          {timezones.map((zone) => <option key={zone} value={zone}>{zone === "local" ? t("System time zone") : zone}</option>)}
+          </SelectField>
         </label>
       </div>
     </section>
