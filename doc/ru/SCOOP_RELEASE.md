@@ -2,13 +2,13 @@
 
 ## Что уже автоматизировано
 
-`scripts/package-scoop.ps1 -Version 0.2.0` выполняет `npm ci`, сборку frontend, `go test ./...`, сборку Windows `agentboard.exe` с номером версии, создаёт ZIP и рассчитывает SHA-256 этого ZIP. Из **этого же** файла он создаёт `release/agentboard.json` с URL, хешем, CLI-shim, ярлыком, `checkver` и `autoupdate`. База живёт вне каталога установки, поэтому `persist` в manifest не нужен.
+`scripts/package-scoop.ps1 -Version X.Y.Z` выполняет `npm ci`, сборку frontend, `go test ./...`, сборку Windows `agentboard.exe` с номером версии, создаёт ZIP и рассчитывает SHA-256 этого ZIP. Из **этого же** файла он создаёт `release/agentboard.json` с URL, хешем, лицензией MIT, CLI-shim, ярлыком, `checkver` и `autoupdate`. ZIP и установщик содержат файл `LICENSE`. База живёт вне каталога установки, поэтому `persist` в manifest не нужен.
 
 `.github/workflows/release.yml` на теге `vX.Y.Z` запускает ту же упаковку в Windows runner, собирает установщик Inno Setup и прикладывает ZIP, установщик и manifest к GitHub Release. Ручной запуск workflow создаёт только artifact для проверки, без публикации релиза.
 
 ## Порядок публикации для сопровождающего
 
-1. Проверьте, что код, документация и номер версии готовы. Определите лицензию проекта: сейчас manifest указывает `Unknown`, потому что файл лицензии в репозитории не задан. Если вы выбираете лицензию, добавьте `LICENSE` и обновите `license` в скрипте перед релизом.
+1. Проверьте, что код, документация, номер версии и файл `LICENSE` готовы.
 2. Локально выполните `./scripts/package-scoop.ps1 -Version X.Y.Z`. Проверьте `release/agentboard-X.Y.Z-windows-amd64.zip`, `release/agentboard.json` и вывод `agentboard version` после распаковки. Не меняйте ZIP после расчёта хеша.
 3. Создайте и отправьте тег `vX.Y.Z`. GitHub Actions опубликует Release с ZIP, `agentboard-X.Y.Z-windows-amd64-setup.exe` и manifest. Проверьте все три файла на странице Release и SHA-256 ZIP из manifest.
 4. На чистой Windows-машине с Scoop выполните `scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/download/agentboard.json`, затем `agentboard version`, `agentboard init` и `agentboard open` в тестовой папке.

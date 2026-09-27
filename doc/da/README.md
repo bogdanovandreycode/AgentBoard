@@ -1,24 +1,35 @@
 # Agentbestyrelse
 
-[🌐 Languages](../LANGUAGES.md)
+![Preview AgentBoard](../../assets/social-preview.png)
 
-AgentBoard er et lokalt opgavebord, hvor menneskelige og AI-medarbejdere arbejder med fælles opgaver, men har forskellige rettigheder. Ansøgningen starter med én fil`agentboard.exe`, åbner webgrænsefladen i browseren og giver arbejderne en separat MCP-server via`stdio`. Dataene forbliver på din computer.
+**[Download til Windows](https://github.com/bogdanovandreycode/AgentBoard/releases/latest) · [Dokumentationsside](https://bogdanovandreycode.github.io/AgentBoard/) · [Licens MIT](../../LICENSE)**
+
+AgentBoard er et lokalt opgavebord, hvor menneskelige og AI-medarbejdere arbejder med fælles opgaver, men har forskellige rettigheder. Applikationen lanceres med én fil `agentboard.exe`, åbner webgrænsefladen i browseren og giver arbejdere en separat MCP-server via `stdio`. Dataene forbliver på din computer.
 
 **[Start fra bunden](START_HERE.md)· [Arbejde med opgaver](TASKS.md)· [AI-forbindelse via MCP](WORKERS_MCP.md)· [Importer JSON](IMPORT.md)· [Indstillinger](SETTINGS.md)· [Problemløsning](TROUBLESHOOTING.md)**
 
+## MVP-funktioner
+
+- Lokalt projektkort med opgavesøgning, JSON-import, brugerdefinerede kolonner og egenskaber.
+- MCP-adgang for en specifik arbejder med begrænsede AI-overgange og endelig menneskelig accept af opgaver.
+- Generel opgavehistorik, kontrolinstruktioner, artefakter, AI-omkostninger og diagnosticering af arbejderforbindelse.
+- Windows installationsprogram, ZIP og Scoop manifest; webgrænsefladen er indbygget i den eksekverbare fil.
+
+AgentBoard er designet til en betroet lokal bruger. Applikationen hoster ikke projekter i skyen og starter ikke selv AI-klienter; Tilslut om nødvendigt en MCP-kompatibel klient til arbejderen.
+
 ## Om fem minutter
 
-1. Download installationsprogrammet`agentboard-VERSION-windows-amd64-setup.exe`fra [Udgivelser](https://github.com/bogdanovandreycode/AgentBoard/releases). Det vil foreslå en mappe (standard`C:\AI\AgentBoard`) og vil tilføje det til`PATH`. Scoop og ZIP er også tilgængelige.
-2. Åbn PowerShell i din projektmappe som f.eks`C:\Projects\MyApp`.
-3. Udfør`agentboard init`(for ZIP: fuld sti til`agentboard.exe`Og`init`).
-4. Udfør`agentboard open`. Vil åbne`http://127.0.0.1:7337`.
+1. Download `agentboard-VERSION-windows-amd64-setup.exe`-installationsprogrammet fra [Releases](https://github.com/bogdanovandreycode/AgentBoard/releases). Det vil foreslå en mappe (som standard `C:\AI\AgentBoard`) og tilføje den til `PATH`. Scoop og ZIP er også tilgængelige.
+2. Åbn PowerShell i din projektmappe, for eksempel `C:\Projects\MyApp`.
+3. Udfør `agentboard init` (for ZIP: fuld sti til `agentboard.exe` og `init`).
+4. Udfør `agentboard open`. `http://127.0.0.1:7337` åbnes.
 5. Tilføj en opgave ved hjælp af knappen **Ny opgave**. For en AI-medarbejder skal du åbne **Workers → Add worker**, vælge klientprofilen og kopiere MCP-konfigurationen.
 
 Hvis du ikke allerede har en projektmappe, skal du oprette en i Windows Stifinder. Et projekt kan være en hvilken som helst mappe, selv uden Git og kode.
 
 ## Installation via Scoop
 
-I PowerShell med [Scoop] allerede installeret](https://scoop.sh/)efter udgivelsen:
+I PowerShell med [Scoop](https://scoop.sh/)] allerede installeret efter udgivelsen:
 
 ```powershell
 scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/download/agentboard.json
@@ -45,8 +56,12 @@ agentboard version
 
 `init` registrerer mappen og skriver kun `.agentboard/project.json` der. SQLite-produktionsdataene er placeret i Windows-brugerkonfigurationsbiblioteket (`%AppData%\AgentBoard\agentboard.db`), uden for projektet og uden for Scoop-installationen. Fjernelse eller opdatering af pakken bør ikke fjerne disse data. Før du overfører til en anden computer, skal du lave en kopi af databasen, mens AgentBoard er stoppet.
 
-Arbejdere - logiske konti; AgentBoard selv kører ikke Codex, Claude eller nogen anden AI-klient. Klienten starter en lokal MCP-proces for en specifik arbejder. MCP er grænsen for applikationstilladelser, og til filisolering skal du bruge AI-klientsandkassen.
+Arbejdere - logiske konti; AgentBoard selv kører ikke Codex, Claude eller nogen anden AI-klient. Klienten starter en lokal MCP-proces for en specifik arbejder. MCP er grænsen for applikationstilladelser, og til filisolering skal du bruge AI-klientsandboxen.
 
 ## For udviklere
 
 Stack: Go, SQLite, officiel MCP Go SDK, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Byg frontend først, derefter Go: `./scripts/build.ps1`. Webfiler er inkluderet i binæren via `go:embed`. Arkitekturen og API er beskrevet i [doc/ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Licens
+
+AgentBoard er et gratis og open source-projekt under [licens MIT](../../LICENSE). Kommerciel brug, ændring, forgrening og omfordeling er tilladt, forudsat at copyright-meddelelsen og licensen opretholdes.

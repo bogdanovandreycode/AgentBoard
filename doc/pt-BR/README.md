@@ -2,9 +2,22 @@
 
 [🌐 Languages](../LANGUAGES.md)
 
+![Visualizar AgentBoard](../../assets/social-preview.png)
+
+**[Baixar para Windows](https://github.com/bogdanovandreycode/AgentBoard/releases/latest) · [Site de documentação](https://bogdanovandreycode.github.io/AgentBoard/) · [Licença MIT](../../LICENSE)**
+
 AgentBoard é um quadro de tarefas local onde trabalhadores humanos e de IA trabalham em tarefas comuns, mas têm direitos diferentes. O aplicativo é iniciado com um arquivo `agentboard.exe`, abre a interface web no navegador e fornece aos trabalhadores um servidor MCP separado via `stdio`. Os dados permanecem no seu computador.
 
 **[Começar do zero](START_HERE.md) · [Trabalhar com tarefas](TASKS.md) · [Conectar IA via MCP](WORKERS_MCP.md) · [Importar JSON](IMPORT.md) · [Configurações](SETTINGS.md) · [Resolver problemas](TROUBLESHOOTING.md)**
+
+## Recursos MVP
+
+- Quadro de projeto local com pesquisa de tarefas, importação JSON, colunas e propriedades personalizadas.
+- Acesso MCP para um trabalhador específico com transições de IA limitadas e aceitação humana final das tarefas.
+- Histórico geral de tarefas, instruções de verificação, artefatos, custos de IA e diagnósticos de conexão de trabalhadores.
+- Instalador do Windows, manifesto ZIP e Scoop; a interface da web está incorporada no arquivo executável.
+
+AgentBoard foi projetado para um usuário local confiável. O aplicativo não hospeda projetos na nuvem e não lança clientes de IA; se necessário, conecte um cliente compatível com MCP ao trabalhador.
 
 ## Em cinco minutos
 
@@ -50,3 +63,7 @@ Trabalhadores - contas lógicas; O próprio AgentBoard não executa Codex, Claud
 ## Para desenvolvedores
 
 Stack: Go, SQLite, SDK oficial do MCP Go, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Crie o frontend primeiro e depois vá: `./scripts/build.ps1`. Os arquivos da Web são incluídos no binário por meio de `go:embed`. A arquitetura e a API estão descritas em [doc/ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Licença
+
+AgentBoard é um projeto gratuito e de código aberto sob [licença MIT](../../LICENSE). O uso comercial, modificação, bifurcação e redistribuição são permitidos, desde que o aviso de direitos autorais e a licença sejam mantidos.

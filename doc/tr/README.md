@@ -1,10 +1,21 @@
 # AjanBoard
 
-[🌐 Languages](../LANGUAGES.md)
+![Önizleme AgentBoard](../../assets/social-preview.png)
+
+**[Windows için indirme](https://github.com/bogdanovandreycode/AgentBoard/releases/latest) · [Belgeler sitesi](https://bogdanovandreycode.github.io/AgentBoard/) · [Lisans MIT](../../LICENSE)**
 
 AgentBoard, insan ve yapay zeka çalışanlarının ortak görevler üzerinde çalıştığı ancak farklı haklara sahip olduğu yerel bir görev panosudur. Uygulama tek bir `agentboard.exe` dosyasıyla başlatılır, tarayıcıda web arayüzünü açar ve çalışanlara `stdio` aracılığıyla ayrı bir MCP sunucusu sağlar. Veriler bilgisayarınızda kalır.
 
-**[Sıfırdan başlayın](START_HERE.md) · [Görevlerle çalışma](TASKS.md) · [MCP](WORKERS_MCP.md) aracılığıyla yapay zekaya bağlanma · [JSON](IMPORT.md)'yu içe aktarma · [Ayarlar](SETTINGS.md) · [Sorunları çözme](TROUBLESHOOTING.md)**
+**[Sıfırdan başla](START_HERE.md) · [Görevlerle çalışma](TASKS.md) · [MCP](WORKERS_MCP.md) aracılığıyla yapay zekaya bağlanma · [JSON](IMPORT.md)'yu içe aktarma · [Ayarlar](SETTINGS.md) · [Sorunları çözme](TROUBLESHOOTING.md)**
+
+## MVP Özellikleri
+
+- Görev arama, JSON içe aktarma, özel sütunlar ve özelliklere sahip yerel proje panosu.
+- Sınırlı yapay zeka geçişlerine ve görevlerin nihai insan kabulüne sahip belirli bir çalışan için MCP erişimi.
+- Genel görev geçmişi, kontrol talimatları, yapılar, yapay zeka maliyetleri ve çalışan bağlantı teşhisi.
+- Windows yükleyici, ZIP ve Scoop bildirimi; web arayüzü yürütülebilir dosyanın içine yerleştirilmiştir.
+
+AgentBoard güvenilir bir yerel kullanıcı için tasarlanmıştır. Uygulama, projeleri bulutta barındırmaz ve AI istemcilerini kendisi başlatmaz; gerekirse çalışana MCP uyumlu bir istemci bağlayın.
 
 ## Beş dakika içinde
 
@@ -50,3 +61,7 @@ agentboard version
 ## Geliştiriciler için
 
 Yığın: Go, SQLite, resmi MCP Go SDK, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Önce ön uç oluşturun, ardından Go: `./scripts/build.ps1`. Web dosyaları `go:embed` aracılığıyla ikili dosyaya dahil edilir. Mimari ve API, [doc/ARCHITECTURE.md](ARCHITECTURE.md)'da açıklanmıştır.
+
+## Lisans
+
+AgentBoard, [lisans MIT](../../LICENSE).] kapsamında ücretsiz ve açık kaynaklı bir projedir. Telif hakkı bildirimi ve lisansının korunması koşuluyla ticari kullanıma, değişikliğe, çatallanmaya ve yeniden dağıtıma izin verilir.

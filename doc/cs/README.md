@@ -2,23 +2,36 @@
 
 [🌐 Languages](../LANGUAGES.md)
 
-AgentBoard je místní panel úkolů, kde lidé a AI pracovníci pracují na společných úkolech, ale mají různá práva. Aplikace začíná jedním souborem`agentboard.exe`, otevírá webové rozhraní v prohlížeči a poskytuje pracovníkům samostatný MCP server přes`stdio`. Data zůstávají ve vašem počítači.
+![Náhled AgentBoard](../../assets/social-preview.png)
+
+**[Stáhnout pro Windows](https://github.com/bogdanovandreycode/AgentBoard/releases/latest) · [Web s dokumentací](https://bogdanovandreycode.github.io/AgentBoard/) · [Licence MIT](../../LICENSE)**
+
+AgentBoard je místní panel úkolů, kde lidé a AI pracovníci pracují na společných úkolech, ale mají různá práva. Aplikace se spouští s jedním souborem `agentboard.exe`, otevře webové rozhraní v prohlížeči a poskytuje pracovníkům samostatný MCP server přes `stdio`. Data zůstávají ve vašem počítači.
 
 **[Začít od nuly](START_HERE.md)· [Práce s úkoly](TASKS.md)· [Připojení AI přes MCP](WORKERS_MCP.md)· [Import JSON](IMPORT.md)· [Nastavení](SETTINGS.md)· [Řešení problémů](TROUBLESHOOTING.md)**
 
+## Funkce MVP
+
+- Místní projektová deska s vyhledáváním úkolů, importem JSON, vlastními sloupci a vlastnostmi.
+- Přístup MCP pro konkrétního pracovníka s omezenými přechody AI a konečným lidským přijetím úkolů.
+- Obecná historie úkolů, kontrolní pokyny, artefakty, náklady na AI a diagnostika připojení pracovníků.
+- Instalační program systému Windows, manifest ZIP a Scoop; webové rozhraní je zabudováno do spustitelného souboru.
+
+AgentBoard je navržen pro důvěryhodného místního uživatele. Aplikace nehostí projekty v cloudu a sama nespouští AI klienty; v případě potřeby připojte k pracovníkovi klienta kompatibilního s MCP.
+
 ## Za pět minut
 
-1. Stáhněte si instalační program`agentboard-VERSION-windows-amd64-setup.exe`z [Vydání](https://github.com/bogdanovandreycode/AgentBoard/releases). Navrhne složku (výchozí`C:\AI\AgentBoard`) a přidá to do`PATH`. Scoop a ZIP jsou také k dispozici.
-2. Otevřete PowerShell ve složce projektu jako`C:\Projects\MyApp`.
-3. Proveď`agentboard init`(pro ZIP: úplná cesta k`agentboard.exe`A`init`).
-4. Proveď`agentboard open`. Otevře se`http://127.0.0.1:7337`.
+1. Stáhněte si instalační program `agentboard-VERSION-windows-amd64-setup.exe` z [Releases](https://github.com/bogdanovandreycode/AgentBoard/releases). Navrhne složku (ve výchozím nastavení `C:\AI\AgentBoard`) a přidá ji do `PATH`. Scoop a ZIP jsou také k dispozici.
+2. Otevřete PowerShell ve složce projektu, například `C:\Projects\MyApp`.
+3. Spusťte `agentboard init` (pro ZIP: úplná cesta k `agentboard.exe` a `init`).
+4. Spusťte `agentboard open`. Otevře se `http://127.0.0.1:7337`.
 5. Přidejte úkol pomocí tlačítka **Nový úkol**. Pro AI pracovníka otevřete **Workers → Add worker**, vyberte profil klienta a zkopírujte konfiguraci MCP.
 
 Pokud ještě nemáte složku projektu, vytvořte si ji v Průzkumníkovi Windows. Projekt může být jakákoli složka, dokonce i bez Gitu a kódu.
 
 ## Instalace přes Scoop
 
-V PowerShellu s již nainstalovaným [Scoop]](https://scoop.sh/)po vydání:
+V PowerShellu s již nainstalovaným [Scoop](https://scoop.sh/)] po vydání:
 
 ```powershell
 scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/download/agentboard.json
@@ -50,3 +63,7 @@ Pracovníci - logické účty; Samotný AgentBoard nespouští Codex, Claude ani
 ## Pro vývojáře
 
 Stack: Go, SQLite, oficiální MCP Go SDK, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Nejprve sestavte frontend, pak jděte: `./scripts/build.ps1`. Webové soubory jsou zahrnuty v binárním formátu přes `go:embed`. Architektura a API jsou popsány v [doc/ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Licence
+
+AgentBoard je bezplatný a open source projekt pod [licence MIT](../../LICENSE). Komerční použití, úpravy, větvení a redistribuce jsou povoleny za předpokladu, že jsou zachovány autorská práva a licence.

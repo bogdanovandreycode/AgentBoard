@@ -16,7 +16,7 @@ LOCALE_SOURCE = (ROOT / "web/src/i18n.ts").read_text(encoding="utf-8")
 LANGUAGES = dict(re.findall(r'\["([\w-]+)", "([^"]+)"\]', LOCALE_SOURCE.split("export const languages = [", 1)[1].split("] as const", 1)[0]))
 LANGUAGES.pop("system")
 DOCUMENTS = ["README.md", *sorted(path.name for path in DOC.glob("*.md") if path.name != "LANGUAGES.md")]
-LINK = re.compile(r"\]\(([^)]+\.md)(#[^)]+)?\)")
+LINK = re.compile(r"\]\(([^)]+)\)")
 
 
 def source_path(language: str, name: str) -> Path:
@@ -41,10 +41,15 @@ def relative_url(current: Path, destination: Path) -> str:
 def markdown_html(text: str, source: Path, output: Path) -> str:
     targets = {source_path(language, name).resolve(): output_path(language, name) for language in LANGUAGES for name in DOCUMENTS}
     targets[(DOC / "LANGUAGES.md").resolve()] = SITE / "doc" / "LANGUAGES.html"
+    targets[(ROOT / "LICENSE").resolve()] = SITE / "LICENSE"
+    targets[(ROOT / "assets/social-preview.png").resolve()] = SITE / "assets/social-preview.png"
 
     def replace_link(match: re.Match[str]) -> str:
-        target = targets.get((source.parent / match.group(1)).resolve())
-        return "](" + (relative_url(output, target) if target else match.group(1)) + (match.group(2) or "") + ")"
+        destination, separator, fragment = match.group(1).partition("#")
+        if "://" in destination or destination.startswith("mailto:"):
+            return match.group(0)
+        target = targets.get((source.parent / destination).resolve())
+        return "](" + (relative_url(output, target) if target else destination) + (separator + fragment if separator else "") + ")"
 
     text = LINK.sub(replace_link, text)
     return markdown.markdown(text, extensions=["fenced_code", "tables", "toc", "sane_lists"])
@@ -95,6 +100,8 @@ def main() -> None:
     assets = SITE / "assets"
     assets.mkdir(exist_ok=True)
     shutil.copyfile(ROOT / "web/public/agentboard-icon.png", assets / "agentboard-icon.png")
+    shutil.copyfile(ROOT / "assets/social-preview.png", assets / "social-preview.png")
+    shutil.copyfile(ROOT / "LICENSE", SITE / "LICENSE")
     shutil.copyfile(ROOT / "doc/site.css", assets / "site.css")
     for language in LANGUAGES:
         for name in DOCUMENTS:

@@ -32,6 +32,9 @@ try {
     $reported = & (Join-Path $stage "agentboard.exe") version
     if ($reported -ne "AgentBoard $Version") { throw "Unexpected binary version: $reported" }
     Copy-Item -LiteralPath (Join-Path $root "README.md") -Destination $stage
+    Copy-Item -LiteralPath (Join-Path $root "LICENSE") -Destination $stage
+    New-Item -ItemType Directory -Force -Path (Join-Path $stage "assets") | Out-Null
+    Copy-Item -LiteralPath (Join-Path $root "assets/social-preview.png") -Destination (Join-Path $stage "assets")
     Copy-Item -LiteralPath (Join-Path $root "doc") -Destination $stage -Recurse
     Copy-Item -LiteralPath (Join-Path $root "web/public/agentboard.ico") -Destination $stage
     if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath }
@@ -42,7 +45,7 @@ try {
         version = $Version
         description = "Local task board for human and AI workers with a scoped MCP server"
         homepage = "https://github.com/bogdanovandreycode/AgentBoard"
-        license = "Unknown"
+        license = "MIT"
         architecture = @{ "64bit" = @{ url = $url; hash = $hash } }
         bin = "agentboard.exe"
         shortcuts = @(, @("agentboard.exe", "AgentBoard", "open"))

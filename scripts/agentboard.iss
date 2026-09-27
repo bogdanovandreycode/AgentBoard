@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.2.0"
+  #define AppVersion "0.2.2"
 #endif
 
 [Setup]
@@ -12,6 +12,7 @@ DefaultGroupName=AgentBoard
 OutputDir=..\release
 OutputBaseFilename=agentboard-{#AppVersion}-windows-amd64-setup
 SetupIconFile=..\web\public\agentboard.ico
+LicenseFile=..\LICENSE
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

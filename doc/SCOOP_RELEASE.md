@@ -2,13 +2,13 @@
 
 ## What is already automated
 
-`scripts/package-scoop.ps1 -Version 0.2.0` runs `npm ci`, frontend build, `go test ./...`, Windows build `agentboard.exe` with version number, creates a ZIP and calculates the SHA-256 of that ZIP. From **the same** file it creates `release/agentboard.json` with URL, hash, CLI-shim, shortcut, `checkver` and `autoupdate`. The database lives outside the installation directory, so `persist` in manifest is not needed.
+`scripts/package-scoop.ps1 -Version X.Y.Z` runs `npm ci`, builds the frontend, runs `go test ./...`, builds the versioned Windows `agentboard.exe`, creates a ZIP and calculates its SHA-256. From **the same** ZIP it creates `release/agentboard.json` with the URL, hash, MIT license, CLI shim, shortcut, `checkver` and `autoupdate`. The ZIP and installer include `LICENSE`. The database lives outside the installation directory, so the manifest does not need `persist`.
 
 `.github/workflows/release.yml` on the `vX.Y.Z` tag runs the same packaging in the Windows runner, builds the Inno Setup installer and attaches the ZIP, installer and manifest to the GitHub Release. Manually running a workflow only creates an artifact for testing, without publishing a release.
 
 ## Posting order for maintainer
 
-1. Check that the code, documentation and version number are ready. Determine the project's license: manifest currently indicates `Unknown` because there is no license file defined in the repository. If you choose a license, add `LICENSE` and update `license` in the script before release.
+1. Check that the code, documentation, version number and `LICENSE` file are ready.
 2. Run `./scripts/package-scoop.ps1 -Version X.Y.Z` locally. Check `release/agentboard-X.Y.Z-windows-amd64.zip`, `release/agentboard.json` and the output of `agentboard version` after extracting. Do not change the ZIP after the hash has been calculated.
 3. Create and submit the `vX.Y.Z` tag. GitHub Actions will publish a Release with a ZIP, `agentboard-X.Y.Z-windows-amd64-setup.exe` and manifest. Check all three files on the Release page and the SHA-256 ZIP from manifest.
 4. On a clean Windows machine with Scoop, run `scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/download/agentboard.json`, then `agentboard version`, `agentboard init` and `agentboard open` in the test folder.

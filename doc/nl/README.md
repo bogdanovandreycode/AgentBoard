@@ -1,10 +1,21 @@
 # Agentenbord
 
-[🌐 Languages](../LANGUAGES.md)
+![Voorbeeld AgentBoard](../../assets/social-preview.png)
+
+**[Download voor Windows](https://github.com/bogdanovandreycode/AgentBoard/releases/latest) · [Documentatiesite](https://bogdanovandreycode.github.io/AgentBoard/) · [Licentie MIT](../../LICENSE)**
 
 AgentBoard is een lokaal taakbord waar mensen en AI-werkers aan gemeenschappelijke taken werken, maar verschillende rechten hebben. De applicatie wordt gestart met één bestand `agentboard.exe`, opent de webinterface in de browser en biedt werknemers via `stdio` een aparte MCP-server. De gegevens blijven op uw computer staan.
 
 **[Van nul beginnen](START_HERE.md) · [Werken met taken](TASKS.md) · [AI verbinden via MCP](WORKERS_MCP.md) · [JSON](IMPORT.md) importeren · [Instellingen](SETTINGS.md) · [Problemen oplossen](TROUBLESHOOTING.md)**
+
+## MVP-functies
+
+- Lokaal projectbord met zoeken naar taken, JSON-import, aangepaste kolommen en eigenschappen.
+- MCP-toegang voor een specifieke werknemer met beperkte AI-overgangen en uiteindelijke menselijke aanvaarding van taken.
+- Algemene taakgeschiedenis, controle-instructies, artefacten, AI-kosten en diagnostiek van werknemersverbindingen.
+- Windows-installatieprogramma, ZIP en Scoop-manifest; de webinterface is ingebouwd in het uitvoerbare bestand.
+
+AgentBoard is ontworpen voor een vertrouwde lokale gebruiker. De applicatie host geen projecten in de cloud en lanceert zelf geen AI-clients; Verbind indien nodig een MCP-compatibele client met de werknemer.
 
 ## Over vijf minuten
 
@@ -50,3 +61,7 @@ Werknemers - logische accounts; AgentBoard zelf voert geen Codex, Claude of enig
 ## Voor ontwikkelaars
 
 Stack: Go, SQLite, officiële MCP Go SDK, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Bouw eerst de frontend en ga dan naar: `./scripts/build.ps1`. Webbestanden worden via `go:embed` in het binaire bestand opgenomen. De architectuur en API worden beschreven in [doc/ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Licentie
+
+AgentBoard is een gratis en open source-project onder [licentie MIT](../../LICENSE). Commercieel gebruik, wijziging, forking en herdistributie zijn toegestaan, op voorwaarde dat de copyrightkennisgeving en licentie behouden blijven.

@@ -1,10 +1,21 @@
 # 에이전트보드
 
-[🌐 Languages](../LANGUAGES.md)
+![미리보기 AgentBoard](../../assets/social-preview.png)
+
+**[Windows용 다운로드](https://github.com/bogdanovandreycode/AgentBoard/releases/latest) · [문서 사이트](https://bogdanovandreycode.github.io/AgentBoard/) · [라이센스 MIT](../../LICENSE)**
 
 AgentBoard는 인간과 AI 작업자가 공통 작업을 수행하지만 서로 다른 권한을 갖는 로컬 작업 보드입니다. 이 애플리케이션은 하나의 파일 `agentboard.exe`로 시작되고 브라우저에서 웹 인터페이스를 열고 `stdio`를 통해 작업자에게 별도의 MCP 서버를 제공합니다. 데이터는 컴퓨터에 남아 있습니다.
 
-**[처음부터 시작](START_HERE.md) · [작업 ](TASKS.md) 작업 · [MCP](WORKERS_MCP.md)를 통해 AI 연결 · [JSON](IMPORT.md) 가져오기 · [설정](SETTINGS.md) · [문제 해결](TROUBLESHOOTING.md)**
+**[처음부터 시작](START_HERE.md) · [tasks](TASKS.md) 작업 · [MCP](WORKERS_MCP.md)를 통해 AI 연결 · [JSON](IMPORT.md) 가져오기 · [설정](SETTINGS.md) · [문제 해결](TROUBLESHOOTING.md)**
+
+## MVP 기능
+
+- 작업 검색, JSON 가져오기, 사용자 정의 열 및 속성이 포함된 로컬 프로젝트 보드.
+- AI 전환이 제한적이고 최종 인간이 작업을 수락하는 특정 작업자에 대한 MCP 액세스입니다.
+- 일반 작업 내역, 확인 지침, 아티팩트, AI 비용 및 작업자 연결 진단.
+- Windows 설치 프로그램, ZIP 및 Scoop 매니페스트; 웹 인터페이스는 실행 파일에 내장되어 있습니다.
+
+AgentBoard는 신뢰할 수 있는 로컬 사용자를 위해 설계되었습니다. 애플리케이션은 클라우드에서 프로젝트를 호스팅하지 않으며 AI 클라이언트 자체를 시작하지 않습니다. 필요한 경우 MCP 호환 클라이언트를 작업자에 연결합니다.
 
 ## 5분 후
 
@@ -50,3 +61,7 @@ agentboard version
 ## 개발자를 위한
 
 스택: Go, SQLite, 공식 MCP Go SDK, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. 먼저 프런트엔드를 빌드한 다음 Go: `./scripts/build.ps1`를 작성하세요. 웹 파일은 `go:embed`를 통해 바이너리에 포함됩니다. 아키텍처와 API는 [doc/ARCHITECTURE.md](ARCHITECTURE.md).
+
+## 라이센스
+
+AgentBoard는 [라이센스 MIT](../../LICENSE)]에 따른 무료 오픈 소스 프로젝트입니다. 저작권 표시와 라이센스가 유지되는 경우 상업적 사용, 수정, 포크 및 재배포가 허용됩니다.

@@ -1,14 +1,25 @@
 # エージェントボード
 
-[🌐 Languages](../LANGUAGES.md)
+![AgentBoard](../../assets/social-preview.png) のプレビュー
+
+**[Windows 用ダウンロード](https://github.com/bogdanovandreycode/AgentBoard/releases/latest) · [ドキュメント サイト](https://bogdanovandreycode.github.io/AgentBoard/) · [ライセンス MIT](../../LICENSE)**
 
 AgentBoard は、人間と AI ワーカーが共通のタスクに取り組むローカル タスク ボードですが、異なる権限を持っています。アプリケーションは 1 つのファイル `agentboard.exe` で起動され、ブラウザで Web インターフェイスが開き、`stdio` 経由でワーカーに別の MCP サーバーを提供します。データはコンピュータ上に残ります。
 
 **[ゼロから始める](START_HERE.md) · [タスクの操作](TASKS.md) · [MCP](WORKERS_MCP.md)経由でAIに接続する] · [JSON](IMPORT.md)をインポートする · [設定](SETTINGS.md) · [問題を解決する](TROUBLESHOOTING.md)**
 
+## MVP の機能
+
+- タスク検索、JSON インポート、カスタム列とプロパティを備えたローカル プロジェクト ボード。
+- 限られた AI 移行と人間によるタスクの最終的な受け入れを伴う、特定の作業者の MCP アクセス。
+- 一般的なタスク履歴、チェック指示、アーティファクト、AI コスト、およびワーカー接続診断。
+- Windows インストーラー、ZIP および Scoop マニフェスト; Web インターフェイスは実行可能ファイルに組み込まれています。
+
+AgentBoard は、信頼できるローカル ユーザー向けに設計されています。アプリケーションはクラウドでプロジェクトをホストせず、AI クライアント自体を起動しません。必要に応じて、MCP 互換クライアントをワーカーに接続します。
+
 ## 5分以内に
 
-1. [リリース ](https://github.com/bogdanovandreycode/AgentBoard/releases)] から `agentboard-VERSION-windows-amd64-setup.exe` インストーラーをダウンロードします。フォルダー (デフォルトでは `C:\AI\AgentBoard`) が提案され、それを `PATH` に追加します。スクープやZIPもございます。
+1. [リリース ](https://github.com/bogdanovandreycode/AgentBoard/releases)] から `agentboard-VERSION-windows-amd64-setup.exe` インストーラーをダウンロードします。フォルダー (デフォルトでは `C:\AI\AgentBoard`) が提案され、それが `PATH` に追加されます。スクープやZIPもございます。
 2. プロジェクト フォルダー (`C:\Projects\MyApp` など) で PowerShell を開きます。
 3. `agentboard init` (ZIP の場合: `agentboard.exe` および `init` へのフルパス) を実行します。
 4. `agentboard open`を実行します。 `http://127.0.0.1:7337` が開きます。
@@ -50,3 +61,7 @@ agentboard version
 ## 開発者向け
 
 スタック: Go、SQLite、公式 MCP Go SDK、React、TypeScript、Vite、PrimeReact、TanStack Query、dnd-kit。最初にフロントエンドを構築してから、`./scripts/build.ps1` に進みます。 Web ファイルは、`go:embed` 経由でバイナリに含まれます。アーキテクチャと API については、[doc/ARCHITECTURE.md](ARCHITECTURE.md).
+
+## ライセンス
+
+AgentBoard は、[ライセンス MIT](../../LICENSE) の下にある無料のオープン ソース プロジェクトです。著作権表示とライセンスが維持されている限り、商用利用、変更、フォーク、再配布が許可されます。

@@ -2,23 +2,36 @@
 
 [🌐 Languages](../LANGUAGES.md)
 
-AgentBoard on paikallinen tehtävälautakunta, jossa ihmiset ja tekoälytyöntekijät työskentelevät yhteisissä tehtävissä, mutta heillä on erilaiset oikeudet. Sovellus alkaa yhdellä tiedostolla`agentboard.exe`, avaa verkkokäyttöliittymän selaimessa ja tarjoaa työntekijöille erillisen MCP-palvelimen kautta`stdio`. Tiedot jäävät tietokoneellesi.
+![Esikatselu AgentBoard](../../assets/social-preview.png)
+
+**[Lataa Windowsille](https://github.com/bogdanovandreycode/AgentBoard/releases/latest) · [Dokumentaatiosivusto](https://bogdanovandreycode.github.io/AgentBoard/) · [Lisenssi MIT](../../LICENSE)**
+
+AgentBoard on paikallinen tehtävälautakunta, jossa ihmiset ja tekoälytyöntekijät työskentelevät yhteisissä tehtävissä, mutta heillä on erilaiset oikeudet. Sovellus käynnistetään yhdellä tiedostolla `agentboard.exe`, avaa verkkoliittymän selaimessa ja tarjoaa työntekijöille erillisen MCP-palvelimen `stdio`:n kautta. Tiedot jäävät tietokoneellesi.
 
 **[Aloittaa tyhjästä](START_HERE.md)· [Työtehtävien parissa työskenteleminen](TASKS.md)· [AI-yhteys MCP:n kautta](WORKERS_MCP.md)· [Tuo JSON](IMPORT.md)· [Asetukset](SETTINGS.md)· [Ongelmanratkaisu](TROUBLESHOOTING.md)**
 
+## MVP-ominaisuudet
+
+- Paikallinen projektilevy, jossa on tehtävähaku, JSON-tuonti, mukautetut sarakkeet ja ominaisuudet.
+- MCP-käyttöoikeus tietylle työntekijälle rajoitetuilla tekoälysiirtymillä ja lopullisella ihmisen hyväksynnällä tehtävissä.
+- Yleinen tehtävähistoria, tarkistusohjeet, artefaktit, tekoälykustannukset ja työntekijöiden yhteysdiagnostiikka.
+- Windowsin asennusohjelma, ZIP- ja Scoop-luettelo; web-käyttöliittymä on sisäänrakennettu suoritettavaan tiedostoon.
+
+AgentBoard on suunniteltu luotettavalle paikalliselle käyttäjälle. Sovellus ei isännöi projekteja pilvessä eikä käynnistä AI-asiakkaita itse; tarvittaessa yhdistä MCP-yhteensopiva asiakas työntekijään.
+
 ## Viidessä minuutissa
 
-1. Lataa asennusohjelma`agentboard-VERSION-windows-amd64-setup.exe`alkaen [Releases](https://github.com/bogdanovandreycode/AgentBoard/releases). Se ehdottaa kansiota (oletus`C:\AI\AgentBoard`) ja lisää sen`PATH`. Scoop ja ZIP ovat myös saatavilla.
-2. Avaa PowerShell projektikansiossasi kuten`C:\Projects\MyApp`.
-3. Suorita`agentboard init`(ZIP: koko polku osoitteeseen`agentboard.exe`Ja`init`).
-4. Suorita`agentboard open`. Avautuu`http://127.0.0.1:7337`.
+1. Lataa `agentboard-VERSION-windows-amd64-setup.exe`-asennusohjelma osoitteesta [Releases](https://github.com/bogdanovandreycode/AgentBoard/releases). Se ehdottaa kansiota (oletuksena `C:\AI\AgentBoard`) ja lisää sen kansioon `PATH`. Scoop ja ZIP ovat myös saatavilla.
+2. Avaa PowerShell projektikansiossasi, esimerkiksi `C:\Projects\MyApp`.
+3. Suorita `agentboard init` (ZIP:lle: koko polku `agentboard.exe`:iin ja `init`).
+4. Suorita `agentboard open`. `http://127.0.0.1:7337` avautuu.
 5. Lisää tehtävä **Uusi tehtävä** -painikkeella. Jos kyseessä on tekoälytyöntekijä, avaa **Työntekijät → Lisää työntekijä**, valitse asiakasprofiili ja kopioi MCP-määritykset.
 
 Jos sinulla ei vielä ole projektikansiota, luo se Windowsin Resurssienhallinnassa. Projekti voi olla mikä tahansa kansio, jopa ilman Gitiä ja koodia.
 
 ## Asennus Scoopin kautta
 
-PowerShellissä, jossa [Scoop] on jo asennettu](https://scoop.sh/)julkaisun jälkeen:
+PowerShellissä, jossa [Scoop](https://scoop.sh/)] on jo asennettu julkaisun jälkeen:
 
 ```powershell
 scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/download/agentboard.json
@@ -50,3 +63,7 @@ Työntekijät - loogiset tilit; AgentBoard itse ei käytä Codexia, Claudea tai 
 ## Kehittäjille
 
 Pino: Go, SQLite, virallinen MCP Go SDK, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Rakenna ensin käyttöliittymä ja sitten Go: `./scripts/build.ps1`. Web-tiedostot sisältyvät binaariin `go:embed`:n kautta. Arkkitehtuuri ja API on kuvattu julkaisussa [doc/ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Lisenssi
+
+AgentBoard on ilmainen ja avoimen lähdekoodin projekti [lisenssillä MIT](../../LICENSE). Kaupallinen käyttö, muokkaaminen, jakaminen ja uudelleenjakelu on sallittua edellyttäen, että tekijänoikeusilmoitus ja lisenssi säilyvät.

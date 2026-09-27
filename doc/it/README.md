@@ -2,9 +2,22 @@
 
 [🌐 Languages](../LANGUAGES.md)
 
+![Anteprima AgentBoard](../../assets/social-preview.png)
+
+**[Download per Windows](https://github.com/bogdanovandreycode/AgentBoard/releases/latest) · [Sito della documentazione](https://bogdanovandreycode.github.io/AgentBoard/) · [Licenza MIT](../../LICENSE)**
+
 AgentBoard è un task board locale in cui i lavoratori umani e quelli dell'intelligenza artificiale lavorano su compiti comuni, ma hanno diritti diversi. L'applicazione viene avviata con un file `agentboard.exe`, apre l'interfaccia web nel browser e fornisce ai lavoratori un server MCP separato tramite `stdio`. I dati rimangono sul tuo computer.
 
 **[Inizia da zero](START_HERE.md) · [Lavorare con le attività](TASKS.md) · [Connessione AI tramite MCP](WORKERS_MCP.md) · [Importa JSON](IMPORT.md) · [Impostazioni](SETTINGS.md) · [Risoluzione dei problemi](TROUBLESHOOTING.md)**
+
+## Caratteristiche MVP
+
+- Scheda di progetto locale con ricerca di attività, importazione JSON, colonne e proprietà personalizzate.
+- Accesso MCP per un lavoratore specifico con transizioni AI limitate e accettazione umana finale delle attività.
+- Cronologia generale delle attività, istruzioni di controllo, artefatti, costi dell'IA e diagnostica della connessione del lavoratore.
+- Programma di installazione di Windows, manifest ZIP e Scoop; l'interfaccia web è integrata nel file eseguibile.
+
+AgentBoard è progettato per un utente locale fidato. L'applicazione non ospita progetti nel cloud e non avvia autonomamente client AI; se necessario, collegare al lavoratore un client compatibile MCP.
 
 ## Tra cinque minuti
 
@@ -50,3 +63,7 @@ Lavoratori - conti logici; AgentBoard stesso non esegue Codex, Claude o qualsias
 ## Per gli sviluppatori
 
 Stack: Go, SQLite, SDK ufficiale MCP Go, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Costruisci prima il frontend, poi Vai: `./scripts/build.ps1`. I file Web sono inclusi nel file binario tramite `go:embed`. L'architettura e l'API sono descritte in [doc/ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Licenza
+
+AgentBoard è un progetto gratuito e open source con [licenza MIT](../../LICENSE). L'uso commerciale, la modifica, il fork e la ridistribuzione sono consentiti a condizione che vengano mantenuti l'avviso di copyright e la licenza.

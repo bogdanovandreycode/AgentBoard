@@ -2,9 +2,22 @@
 
 [🌐 Languages](../LANGUAGES.md)
 
+![Xem trước AgentBoard](../../assets/social-preview.png)
+
+**[Tải xuống cho Windows](https://github.com/bogdanovandreycode/AgentBoard/releases/latest) · [Trang tài liệu](https://bogdanovandreycode.github.io/AgentBoard/) · [Giấy phép MIT](../../LICENSE)**
+
 AgentBoard là một ban nhiệm vụ địa phương nơi nhân viên con người và AI làm việc trên các nhiệm vụ chung nhưng có các quyền khác nhau. Ứng dụng được khởi chạy với một tệp `agentboard.exe`, mở giao diện web trong trình duyệt và cung cấp cho nhân viên một máy chủ MCP riêng thông qua `stdio`. Dữ liệu vẫn còn trên máy tính của bạn.
 
 **[Bắt đầu từ đầu](START_HERE.md) · [Làm việc với các tác vụ](TASKS.md) · [Kết nối AI qua MCP](WORKERS_MCP.md) · [Nhập JSON](IMPORT.md) · [Cài đặt](SETTINGS.md) · [Giải quyết vấn đề](TROUBLESHOOTING.md)**
+
+## Tính năng MVP
+
+- Bảng dự án cục bộ với tìm kiếm tác vụ, nhập JSON, cột và thuộc tính tùy chỉnh.
+- Quyền truy cập MCP cho một nhân viên cụ thể với khả năng chuyển đổi AI hạn chế và sự chấp nhận nhiệm vụ cuối cùng của con người.
+- Lịch sử nhiệm vụ chung, hướng dẫn kiểm tra, tạo tác, chi phí AI và chẩn đoán kết nối nhân viên.
+- Trình cài đặt Windows, tệp kê khai ZIP và Scoop; giao diện web được tích hợp vào tệp thực thi.
+
+AgentBoard được thiết kế cho người dùng địa phương đáng tin cậy. Ứng dụng không lưu trữ các dự án trên đám mây và không tự khởi chạy ứng dụng khách AI; nếu cần, hãy kết nối máy khách tương thích MCP với nhân viên.
 
 ## Trong năm phút nữa
 
@@ -18,7 +31,7 @@ Nếu bạn chưa có thư mục dự án, hãy tạo một thư mục trong Win
 
 ## Cài đặt qua Scoop
 
-Trong PowerShell có [Scoop](https://scoop.sh/)] đã được cài đặt sau khi phát hành:
+Trong PowerShell với [Scoop](https://scoop.sh/)] đã được cài đặt sau khi phát hành:
 
 ```powershell
 scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/download/agentboard.json
@@ -50,3 +63,7 @@ Công nhân - tài khoản logic; Bản thân AgentBoard không chạy Codex, Cl
 ## Dành cho nhà phát triển
 
 Ngăn xếp: Go, SQLite, MCP Go SDK chính thức, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Xây dựng giao diện người dùng trước, sau đó đi: `./scripts/build.ps1`. Các tệp web được bao gồm trong tệp nhị phân thông qua `go:embed`. Kiến trúc và API được mô tả trong [doc/ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Giấy phép
+
+AgentBoard là một dự án nguồn mở và miễn phí theo [giấy phép MIT](../../LICENSE). Được phép sử dụng, sửa đổi, phân tách và phân phối lại vì mục đích thương mại với điều kiện duy trì thông báo bản quyền và giấy phép.

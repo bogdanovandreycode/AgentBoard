@@ -13,6 +13,7 @@ a:hover { color: #d0d9ff; }
 .sidebar a { display: block; padding: 8px 12px; border-radius: 8px; color: #b5c0d8; text-decoration: none; line-height: 1.3; }
 .sidebar a:hover, .sidebar a[aria-current="page"] { color: #fff; background: #252d4b; }
 .content { min-width: 0; }
+.content img { display: block; max-width: 100%; height: auto; border-radius: 14px; }
 .content h1 { font-size: clamp(1.8rem, 3vw, 2.5rem); line-height: 1.2; margin: 0 0 1.2rem; letter-spacing: -.04em; }
 .content h2 { font-size: 1.45rem; line-height: 1.3; margin-top: 2.4rem; border-bottom: 1px solid #30394d; padding-bottom: .45rem; }
 .content h3 { margin-top: 2rem; }

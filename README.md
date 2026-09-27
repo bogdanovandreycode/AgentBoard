@@ -1,10 +1,23 @@
 # AgentBoard
 
+![AgentBoard project preview](assets/social-preview.png)
+
 **Documentation:** [English](README.md) · [Русский](doc/ru/README.md) · [all 24 languages](doc/LANGUAGES.md)
+
+**[Download for Windows](https://github.com/bogdanovandreycode/AgentBoard/releases/latest) · [Documentation site](https://bogdanovandreycode.github.io/AgentBoard/) · [MIT license](LICENSE)**
 
 AgentBoard is a local task board where human and AI workers work on common tasks, but have different rights. The application is launched with a single file `agentboard.exe`, opens the web interface in the browser and provides workers with a separate MCP server via `stdio`. The data remains on your computer.
 
 **[Start from scratch](doc/START_HERE.md) · [Working with tasks](doc/TASKS.md) · [Connecting AI via MCP](doc/WORKERS_MCP.md) · [Import JSON](doc/IMPORT.md) · [Settings](doc/SETTINGS.md) · [Solving problems](doc/TROUBLESHOOTING.md)**
+
+## What the MVP includes
+
+- A local project board with task search, JSON import, custom columns and properties.
+- Worker-specific MCP access with explicit AI transitions and human final acceptance.
+- Shared task history, testing instructions, artifacts, AI costs and worker connection diagnostics.
+- A Windows installer, ZIP and Scoop manifest; the web UI is embedded in the executable.
+
+AgentBoard is designed for a trusted local user. It does not host projects or start AI clients for you; connect an MCP-compatible client to a worker when needed.
 
 ## In five minutes
 
@@ -50,3 +63,7 @@ Workers - logical accounts; AgentBoard itself does not run Codex, Claude or any 
 ## For developers
 
 Stack: Go, SQLite, official MCP Go SDK, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Build frontend first, then Go: `./scripts/build.ps1`. Web files are included in the binary via `go:embed`. The architecture and API are described in [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).
+
+## License
+
+AgentBoard is free and open source under the [MIT License](LICENSE). You may use it commercially, modify it, fork it and redistribute it while retaining the copyright and permission notice.
