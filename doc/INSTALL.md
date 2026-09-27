@@ -1,17 +1,30 @@
 # Установка и запуск на Windows
 
+## Установщик (рекомендуется)
+
+Скачайте `agentboard-VERSION-windows-amd64-setup.exe` со страницы [Releases](https://github.com/bogdanovandreycode/AgentBoard/releases). Мастер установки предложит папку; по умолчанию это `C:\AI\AgentBoard`. Он скопирует `agentboard.exe` и документацию, создаст ярлык и добавит выбранную папку в системный `PATH`. После установки откройте новый терминал, чтобы команда `agentboard` стала доступна.
+
+В папке вашего проекта выполните:
+
+```powershell
+agentboard init
+agentboard open
+```
+
+Интерфейс встроен в `agentboard.exe`; отдельная установка Go или Node.js не нужна. Данные хранятся в `%AppData%\AgentBoard` и сохраняются при обновлении или удалении программы. Удаление через «Установленные приложения» убирает ярлыки и запись из `PATH`.
+
 ## Установка Scoop
 
 Если Scoop ещё не установлен, откройте PowerShell от своего обычного пользователя и следуйте [официальной инструкции Scoop](https://scoop.sh/). При ограничениях корпоративного компьютера обратитесь к администратору; AgentBoard также можно запустить из ZIP без Scoop.
 
-После публикации первого релиза установите AgentBoard:
+Альтернативно установите AgentBoard через Scoop:
 
 ```powershell
 scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/download/agentboard.json
 agentboard version
 ```
 
-Наличие manifest в GitHub Release можно проверить на [странице Releases](https://github.com/bogdanovandreycode/AgentBoard/releases). Пока релиза нет, скачивать нечего. После добавления manifest в Scoop bucket можно устанавливать по имени bucket и обновлять командой `scoop update agentboard`.
+Наличие manifest в GitHub Release можно проверить на [странице Releases](https://github.com/bogdanovandreycode/AgentBoard/releases). После добавления manifest в Scoop bucket можно устанавливать по имени bucket и обновлять командой `scoop update agentboard`.
 
 ## ZIP без Scoop
 

@@ -6,7 +6,7 @@ AgentBoard — локальная доска задач, на которой ч�
 
 ## За пять минут
 
-1. Установите AgentBoard через Scoop после публикации первого релиза (инструкция ниже) или скачайте ZIP из [Releases](https://github.com/bogdanovandreycode/AgentBoard/releases) и распакуйте его.
+1. Скачайте установщик `agentboard-VERSION-windows-amd64-setup.exe` из [Releases](https://github.com/bogdanovandreycode/AgentBoard/releases). Он предложит папку (по умолчанию `C:\AI\AgentBoard`) и добавит её в `PATH`. Доступны также Scoop и ZIP.
 2. Откройте PowerShell в папке вашего проекта, например `C:\Projects\MyApp`.
 3. Выполните `agentboard init` (для ZIP: полный путь к `agentboard.exe` и `init`).
 4. Выполните `agentboard open`. Откроется `http://127.0.0.1:7337`.
@@ -23,7 +23,7 @@ scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/d
 agentboard version
 ```
 
-Первого GitHub Release пока нет: до его публикации эта команда не сработает. Для разработчиков есть [сборка из исходников](doc/INSTALL.md). Release workflow создаёт ZIP и Scoop manifest с SHA-256 из одного и того же артефакта. Обновление установленной версии: `scoop update agentboard` после добавления manifest в bucket; подробности — [подготовка релиза](doc/SCOOP_RELEASE.md).
+Для разработчиков есть [сборка из исходников](doc/INSTALL.md). Release workflow создаёт установщик, ZIP и Scoop manifest с SHA-256 из одного и того же артефакта. Обновление установленной через Scoop версии: `scoop update agentboard` после добавления manifest в bucket; подробности — [подготовка релиза](doc/SCOOP_RELEASE.md).
 
 ## Как устроена доска
 

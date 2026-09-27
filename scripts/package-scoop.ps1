@@ -33,6 +33,7 @@ try {
     if ($reported -ne "AgentBoard $Version") { throw "Unexpected binary version: $reported" }
     Copy-Item -LiteralPath (Join-Path $root "README.md") -Destination $stage
     Copy-Item -LiteralPath (Join-Path $root "doc") -Destination $stage -Recurse
+    Copy-Item -LiteralPath (Join-Path $root "web/public/agentboard.ico") -Destination $stage
     if (Test-Path -LiteralPath $zipPath) { Remove-Item -LiteralPath $zipPath }
     Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zipPath
     $hash = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvariant()
