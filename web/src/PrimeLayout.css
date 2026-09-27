@@ -258,6 +258,42 @@ body { min-width: 320px; }
 .task-sidebar.p-sidebar-exit-active { opacity: 0; transform: translateX(40px); transition: transform .22s ease-in, opacity .22s ease-in; }
 .p-toast.p-toast-top-right { z-index: 12000 !important; }
 .app-shell > main > :is(.workers-page, .settings-page, .import-page) { animation: tab-enter .22s ease both; }
+
+/* Project chooser */
+.project-launcher { box-sizing: border-box; max-width: 1320px; min-height: 100vh; margin: 0 auto; padding: clamp(20px, 4vw, 56px); color: var(--text); }
+body:has(.project-launcher) { background: radial-gradient(circle at 72% -12%, #25234d 0, transparent 43%), var(--bg); }
+.launcher-header, .launcher-brand, .launcher-toolbar, .project-tile-top { display: flex; align-items: center; justify-content: space-between; }
+.launcher-header { padding-bottom: 46px; }
+.launcher-brand { justify-content: flex-start; gap: 11px; font-size: 21px; font-weight: 750; letter-spacing: -.035em; }
+.launcher-brand img { width: 38px; height: 38px; object-fit: contain; }
+.launcher-count { border: 1px solid var(--line); border-radius: 999px; padding: 8px 13px; color: var(--muted); font-size: 12px; }
+.launcher-intro { margin-bottom: 30px; }
+.launcher-eyebrow { color: var(--accent); font-size: 11px; font-weight: 750; text-transform: uppercase; letter-spacing: .12em; }
+.launcher-intro h1 { margin: 5px 0 6px; font-size: clamp(30px, 4vw, 46px); letter-spacing: -.05em; }
+.launcher-intro > p:last-child { margin: 0; color: var(--muted); font-size: 14px; }
+.launcher-toolbar { gap: 16px; margin: 28px 0 18px; }
+.launcher-toolbar > span { white-space: nowrap; color: var(--muted); font-size: 13px; }
+.launcher-search { display: flex; align-items: center; gap: 10px; width: min(460px, 100%); padding: 0 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--muted); }
+.launcher-search:focus-within { border-color: var(--accent); }
+.launcher-search .p-inputtext { flex: 1; min-width: 0; border: 0; box-shadow: none; background: transparent; color: var(--text); }
+.project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr)); gap: 18px; }
+.project-tile { box-sizing: border-box; display: flex; flex-direction: column; min-width: 0; min-height: 210px; margin: 0; padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: var(--text); box-shadow: 0 10px 30px #00000014; transition: border-color .2s, transform .2s, box-shadow .2s; }
+.project-tile:hover { border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 18px 40px #00000030; }
+.project-tile-top { width: 100%; color: var(--muted); }
+.project-avatar { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: color-mix(in srgb, var(--accent) 24%, var(--panel2)); color: var(--accent); font-size: 20px; font-weight: 750; }
+.project-tile h2 { max-width: 100%; margin: 17px 0 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 18px; letter-spacing: -.02em; }
+.project-tile p { width: 100%; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.project-tile .p-button { align-self: flex-start; margin-top: auto; padding: 16px 0 0; color: var(--accent); }
+.launcher-paginator { justify-content: center; margin-top: 25px; background: transparent; }
+.launcher-empty, .launcher-no-results { display: flex; flex-direction: column; align-items: center; max-width: 560px; margin: 7vh auto 0; padding: 38px 24px; border: 1px dashed var(--line); border-radius: 18px; background: var(--panel); text-align: center; }
+.launcher-empty img { width: 92px; height: 92px; object-fit: contain; }
+.launcher-empty h2, .launcher-no-results h2 { margin: 10px 0; font-size: 21px; color: var(--text); }
+.launcher-empty p, .launcher-no-results p { margin: 5px 0 16px; color: var(--muted); line-height: 1.5; }
+.launcher-empty code { display: block; width: min(100%, 360px); padding: 14px; border-radius: 9px; background: var(--panel2); color: var(--text); text-align: left; }
+.launcher-no-results > i { color: var(--accent); font-size: 28px; }
+.brand-mark { overflow: hidden; background: transparent !important; box-shadow: none; }
+.brand-mark img { width: 34px; height: 34px; object-fit: contain; }
+@media (max-width: 600px) { .launcher-header { padding-bottom: 25px; } .launcher-toolbar { align-items: stretch; flex-direction: column; } .launcher-count { display: none; } }
 .app-shell > main > .filters { animation: tab-enter .22s ease both; }
 .sidebar nav .p-button { transition: background .2s ease, color .2s ease, transform .2s ease; }
 .sidebar nav .p-button:active { transform: scale(.98); }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "primereact/button";
 import { InputText } from "primereact/inputtext";
 import { Message } from "primereact/message";
+import { TabMenu } from "primereact/tabmenu";
 import { SelectField } from "./SelectField";
 import { t } from "./i18n";
 import { LanguagePicker } from "./LanguagePicker";
@@ -20,6 +21,7 @@ export function SettingsPage({ value, onSave, saving, error, projectPath }: {
 }) {
   const [form, setForm] = useState(value);
   const [newColumn, setNewColumn] = useState("");
+  const [activeTab, setActiveTab] = useState(0);
   const changeColumn = (from: number, to: number) => {
     if (to < 0 || to >= form.columns.length || lockedColumns.has(form.columns[from].id) || lockedColumns.has(form.columns[to].id)) return;
     const columns = [...form.columns];
@@ -35,7 +37,8 @@ export function SettingsPage({ value, onSave, saving, error, projectPath }: {
     setNewColumn("");
   };
   return <div className="settings-page">
-    <section className="settings-panel">
+    <TabMenu className="settings-tabs" model={[{ label: t("General") }, { label: t("Columns") }, { label: "MCP" }]} activeIndex={activeTab} onTabChange={(event) => setActiveTab(event.index)} />
+    {activeTab === 0 && <section className="settings-panel">
       <h2>{t("Appearance and language")}</h2>
       <div className="settings-grid">
         <label>{t("Language")}<LanguagePicker value={form.language} onChange={(language) => setForm({ ...form, language })} /></label>
@@ -47,8 +50,8 @@ export function SettingsPage({ value, onSave, saving, error, projectPath }: {
           </SelectField>
         </label>
       </div>
-    </section>
-    <section className="settings-panel">
+    </section>}
+    {activeTab === 1 && <section className="settings-panel">
       <h2>{t("Board columns")}</h2>
       <p>{t("AI workflow columns are fixed. Custom columns are human-only; moving a task there places it in Backlog for the AI workflow.")}</p>
       <div className="settings-columns">
@@ -63,8 +66,8 @@ export function SettingsPage({ value, onSave, saving, error, projectPath }: {
       </div>
       <div className="settings-add"><InputText placeholder={t("New column name")} value={newColumn} onChange={(e) => setNewColumn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addColumn(); }} /><Button label={t("Add column")} onClick={addColumn} disabled={!newColumn.trim()} /></div>
       <p>{t("Deleting a custom column returns its tasks to Backlog when you save.")}</p>
-    </section>
-    <section className="settings-panel">
+    </section>}
+    {activeTab === 2 && <section className="settings-panel">
       <h2>{t("Web and MCP")}</h2>
       <div className="settings-grid">
         <label>{t("Board refresh (seconds)")}<InputText type="number" min={1} max={60} value={form.boardRefreshSeconds.toString()} onChange={(e) => setForm({ ...form, boardRefreshSeconds: Number(e.target.value) })} /></label>
@@ -73,7 +76,7 @@ export function SettingsPage({ value, onSave, saving, error, projectPath }: {
       <p>{t("The web server listens on 127.0.0.1:7337 by default. Change the address with --addr when starting agentboard open or serve; restart is required.")}</p>
       <p>{t("Each worker uses its own MCP command. Open a worker to copy its client configuration and check the connection.")}</p>
       <code className="settings-command">agentboard mcp --project "{projectPath}" --worker WORKER_SLUG</code>
-    </section>
+    </section>}
     {error && <Message severity="error" text={error} />}
     <Button className="primary" label={saving ? t("Saving…") : t("Save settings")} loading={saving} disabled={saving || form.columns.length < builtInColumns.length} onClick={() => onSave(form)} />
   </div>;

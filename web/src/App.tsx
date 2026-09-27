@@ -50,6 +50,8 @@ import { propertyDisplay, type PropertyDef } from "./propertyUtils";
 import { MarkdownField, MarkdownView } from "./MarkdownField";
 import { capabilityPresets, relativeTime } from "./workerPresentation";
 import { SettingsPage } from "./SettingsPage";
+import { ProjectsPage } from "./ProjectsPage";
+import { playAgentMoveSound } from "./notificationSound";
 import { builtInColumns, formatDate, type ProjectSettings } from "./settings";
 import { setLanguage, t, t as translate } from "./i18n";
 import { harnessPresets, mcpConfiguration, presetCapabilities } from "./workerPresets";
@@ -94,6 +96,7 @@ type History = {
   EntryType: string;
   Content: string;
   CreatedAt: string;
+  WorkerID?: string | null;
 };
 type TestRun = {
   ID: string;
@@ -188,6 +191,7 @@ function useDateFormat() {
 
 function App() {
   const toast = useRef<Toast>(null);
+  const previousBoard = useRef<{ projectID: string; states: Map<string, string> } | undefined>(undefined);
   const notify: Notify = (severity, summary, detail) => toast.current?.show({ severity, summary, detail, life: 4000 });
   const [, tick] = useState(0);
   useEffect(() => {
@@ -253,6 +257,22 @@ function App() {
       refetchInterval: (settings.data?.boardRefreshSeconds || 1) * 1000,
       enabled: !!active,
     });
+  useEffect(() => {
+    if (!active || !board.data) return;
+    const states = new Map(Object.values(board.data).flat().map((task) => [task.ID, task.BoardColumn || task.State]));
+    const previous = previousBoard.current;
+    previousBoard.current = { projectID: active, states };
+    if (!previous || previous.projectID !== active) return;
+    const moved = [...states].filter(([id, state]) => previous.states.has(id) && previous.states.get(id) !== state);
+    if (!moved.length) return;
+    Promise.all(moved.map(async ([id]) => {
+      const history = await api<History[]>(`/tasks/${id}/history`);
+      const transition = [...history].reverse().find((entry) => entry.EntryType === "state_transition");
+      return Boolean(transition?.WorkerID);
+    })).then((agentMoves) => {
+      if (previousBoard.current?.projectID === active && agentMoves.some(Boolean)) playAgentMoveSound();
+    }).catch(() => {});
+  }, [active, board.data]);
   const refresh = () => {
       qc.invalidateQueries({ queryKey: ["board", active] });
       qc.invalidateQueries({ queryKey: ["workers", active] });
@@ -306,21 +326,7 @@ function App() {
         subtitle={projects.error.message}
       />
     );
-  if (!active)
-    return (
-      <main className="project-launcher">
-        <h1>AgentBoard</h1>
-        <h2>{t("Projects")}</h2>
-        {projectID && <Message severity="warn" text={t("The requested project is not registered on this server. Select a project below.")} />}
-        {!projects.data?.length && <Message severity="info" text={<>{t("Run")} <code>agentboard init</code> {t("in a project folder. This list updates automatically.")}</>} />}
-        {projects.data?.map((p) => (
-          <Card className="project-tile" key={p.ID} title={p.Name} subTitle={p.Path}>
-            <Button label={t("Open project")} icon="pi pi-arrow-right" iconPos="right" text
-              onClick={() => selectProject(p.ID)} />
-          </Card>
-        ))}
-      </main>
-    );
+  if (!active) return <ProjectsPage projects={projects.data || []} invalidProject={!!projectID} onOpen={selectProject} />;
   return (
     <NotificationContext.Provider value={notify}>
     <DateContext.Provider value={{ timezone: settings.data?.timezone || "local", language: settings.data?.language || "system" }}>
@@ -328,9 +334,7 @@ function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark">
-            <Sparkles size={18} />
-          </span>
+          <span className="brand-mark"><img src="/agentboard-icon.png" alt="" /></span>
           <span>AgentBoard</span>
         </div>
         <div className="workspace-label">{t("Workspace")}</div>

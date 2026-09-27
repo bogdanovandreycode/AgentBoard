@@ -38,6 +38,14 @@ const rows: Record<string, string> = {
 };
 
 const russianExtra: Record<string, string> = {
+  "General": "Основные", "Columns": "Колонки",
+  "Choose a project to open its board and workers.": "Выберите проект, чтобы открыть его доску и воркеров.",
+  "No projects connected yet": "Ещё не подключены проекты",
+  "Open a terminal in your project folder and run:": "Откройте терминал в папке проекта и выполните:",
+  "Then run agentboard open. The project will appear here automatically.": "Затем выполните agentboard open. Проект автоматически появится здесь.",
+  "Search projects by name or path…": "Поиск по названию или пути…",
+  "Search projects": "Поиск проектов", "No matching projects": "Проекты не найдены",
+  "Try another name or path.": "Попробуйте другое название или путь.", "Clear search": "Очистить поиск",
   "Task saved": "Задача сохранена", "Property saved": "Свойство сохранено", "Worker saved": "Воркер сохранён", "Save failed": "Не удалось сохранить",
   "Placeholder": "Подсказка в поле", "Regex": "Регулярное выражение", "Default value": "Значение по умолчанию",
   "All projects": "Все проекты", "Workspace": "Рабочее пространство", "Filters": "Фильтры", "Fit all columns": "Уместить все колонки", "Wide columns": "Широкие колонки", "Registered workers": "Зарегистрированные воркеры", "Add worker": "Добавить воркера", "Add property": "Добавить свойство", "Task properties": "Свойства задач", "Create task": "Создать задачу", "Edit task": "Редактировать задачу", "Edit worker": "Редактировать воркера", "Title": "Название", "Description": "Описание", "State": "Этап", "Priority": "Приоритет", "Responsible": "Ответственный", "Testing mode": "Режим тестирования", "Dependencies": "Зависимости", "AI test instructions": "Инструкции для AI тестирования", "Human test instructions": "Инструкции для ручного тестирования", "Name": "Имя", "Slug": "Идентификатор", "Kind": "Тип", "Enabled": "Включён", "Capability preset": "Профиль возможностей", "Advanced: capabilities JSON": "Дополнительно: возможности JSON", "Cancel": "Отмена", "Save": "Сохранить", "Search": "Поиск", "Open project": "Открыть проект", "Projects": "Проекты", "Complete": "Готово", "Backlog": "Очередь", "Features": "Задачи", "In progress": "В работе", "Testing": "Тестирование", "Verification": "Проверка", "Offline": "Не в сети", "Active": "Активен", "Delete": "Удалить", "Import": "Импорт", "Settings saved": "Настройки сохранены",
