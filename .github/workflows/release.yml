@@ -63,3 +63,4 @@ jobs:
             "release/agentboard-$env:RELEASE_VERSION-windows-amd64-setup.exe" `
             'release/agentboard.json' `
             --verify-tag --generate-notes --title "AgentBoard $env:RELEASE_VERSION"
+
