@@ -1,16 +1,16 @@
-# Решение проблем
+# Problem solving
 
-| Симптом | Что проверить |
+| Symptom | What to check |
 | --- | --- |
-| `agentboard` не найден | Перезапустите PowerShell после Scoop. При установке из ZIP используйте полный путь к `agentboard.exe`. |
-| Веб-страница показывает старый интерфейс после сборки | Остановите запущенный сервер Ctrl+C. Выполните `./scripts/build.ps1`, запустите новый бинарник. Vite должен собраться до Go, потому что интерфейс встроен в EXE. Обновите страницу Ctrl+F5. |
-| Порт 7337 занят | Возможно, AgentBoard уже работает. Откройте `http://127.0.0.1:7337` или завершите старый процесс. Для другого порта используйте `--addr`. |
-| Проект не найден | В нужной папке выполните `agentboard init`. Затем `agentboard open` из неё или `agentboard open C:\путь\к\проекту`. |
-| Воркер не видит задачи | Задача должна быть назначена именно этому воркеру и находиться в `Features`, `In progress`, `Testing` или `Verification`. `Backlog`, `Complete` и пользовательские колонки AI не видит. |
-| MCP server check есть, а клиент не подключён | Проверка сервера не проверяет настройки внешнего клиента. Перезапустите клиент, проверьте его конфигурационный файл, путь к `agentboard.exe`, `--project`, `--worker` и общий `--db`. Попросите вызвать `get_my_board`. |
-| Воркер Offline | Клиент мог завершиться или ещё не запускал MCP. После 90 секунд без heartbeat сессия считается отключённой. |
-| Файл JSON не импортируется | Проверьте `version: 1`, обязательный `title`, существующие `Slug` воркеров и имена свойств. JSON не допускает комментарии и завершающие запятые. |
-| Не удаётся пересобрать `agentboard.exe` | Windows не может заменить запущенный EXE. Остановите сервер Ctrl+C и повторите сборку. |
-| Задачи пропали после обновления | Проверьте, что `--db` не указывает на другой файл и вы вошли под тем же пользователем Windows. База по умолчанию находится в `%AppData%\AgentBoard`. |
+| `agentboard` not found | Restart PowerShell after Scoop. When installing from a ZIP, use the full path to `agentboard.exe`. |
+| Web page showing old interface after build | Stop the running server Ctrl+C. Execute `./scripts/build.ps1`, launch the new binary. Vite must build before Go because the interface is built into the EXE. Refresh the page Ctrl+F5. |
+| Port 7337 busy | AgentBoard may already be running. Open `http://127.0.0.1:7337` or terminate the old process. For a different port, use `--addr`. |
+| Project not found | In the desired folder, run `agentboard init`. Then run `agentboard open` there or `agentboard open C:\Projects\MyProject`. |
+| The worker does not see the task | The task must be assigned to this particular worker and be in `Features`, `In progress`, `Testing` or `Verification`. AI does not see `Backlog`, `Complete` and custom columns. |
+| MCP server check exists, but the client is not connected | The server check does not check the external client settings. Restart the client, check its configuration file, path to `agentboard.exe`, `--project`, `--worker` and general `--db`. Ask to call `get_my_board`. |
+| Worker Offline | The client may have terminated or may not have started MCP yet. After 90 seconds without a heartbeat, the session is considered disconnected. |
+| JSON file not importing | Check `version: 1`, required `title`, existing `Slug` workers and property names. JSON does not allow comments or trailing commas. |
+| Cannot rebuild `agentboard.exe` | Windows cannot replace a running EXE. Stop the server Ctrl+C and try the build again. |
+| Tasks disappeared after update | Check that `--db` does not point to a different file and that you are logged in as the same Windows user. The default database is located in `%AppData%\AgentBoard`. |
 
-Если ошибка не описана, соберите точный текст сообщения, версии `agentboard version` и Windows, а также действия для повторения. Не публикуйте приватные данные проекта или содержимое базы в открытом issue.
+If the error is not described, collect the exact text of the message, the `agentboard version` and Windows versions, and steps to retry. Do not publish private project data or database contents in an open issue.

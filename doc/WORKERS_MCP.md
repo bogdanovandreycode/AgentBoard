@@ -1,39 +1,39 @@
-# Воркеры и подключение MCP
+# Workers and MCP connection
 
-## Шаг 1. Создайте воркера
+## Step 1. Create a worker
 
-В AgentBoard откройте **Workers → Add worker**. Выберите профиль клиента: Codex, Claude Code, Gemini CLI, Cursor, OpenCode, Ollama via OpenCode, VS Code Copilot или другой MCP-клиент. Профиль заполняет типичные возможности (код, тесты, Git); вы можете их поменять. Имя видно на доске, а `Slug` — короткий идентификатор без пробелов для команды MCP. Нажмите **Save**.
+In AgentBoard, open **Workers → Add worker**. Select a client profile: Codex, Claude Code, Gemini CLI, Cursor, OpenCode, Ollama via OpenCode, VS Code Copilot or another MCP client. The profile fills in typical features (code, tests, Git); you can change them. The name is visible on the board, and `Slug` is a short identifier without spaces for the MCP command. Click **Save**.
 
-Один воркер соответствует одной AI-личности. Для разных клиентов или команд создайте разных воркеров. Профиль возможностей описывает специализацию, но не расширяет права AI на этапы задач.
+One worker corresponds to one AI personality. Create different workers for different clients or teams. The capability profile describes the specialization, but does not extend the AI's rights to task stages.
 
-## Шаг 2. Скопируйте конфигурацию
+## Step 2. Copy the configuration
 
-Откройте созданного воркера. В блоке **MCP diagnostics** показан конфигурационный фрагмент и файл, куда его добавить. Нажмите **Copy MCP config**. Если файл уже существует, добавьте предложенный сервер в существующий объект `mcpServers`/`servers`/`mcp`, не стирая другие серверы.
+Open the created worker. The **MCP diagnostics** block shows the configuration fragment and the file where to add it. Click **Copy MCP config**. If the file already exists, add the suggested server to the existing `mcpServers`/`servers`/`mcp` object without erasing other servers.
 
-Главная команда выглядит так:
+The main command looks like this:
 
 ```text
 agentboard mcp --project C:\Projects\MyFirstProject --worker codex
 ```
 
-`--project` должен указывать на папку, которую вы зарегистрировали через `agentboard init`. `--worker` — `Slug` созданного воркера. MCP-клиент запускает эту команду сам, когда ему нужны инструменты. В браузере AgentBoard веб-сервер может работать отдельно.
+`--project` should point to the folder you registered via `agentboard init`. `--worker` — `Slug` of the created worker. The MCP client runs this command itself when it needs tools. In the AgentBoard browser, the web server can run separately.
 
-В блоке диагностики после проверки указан абсолютный путь к запущенному `agentboard.exe`. Он особенно полезен при установке из ZIP. При установке через Scoop можно использовать команду `agentboard`, если клиент видит тот же `PATH`.
+After checking, the diagnostic block contains the absolute path to the running `agentboard.exe`. It is especially useful when installing from a ZIP. When installing via Scoop, you can use the `agentboard` command if the client sees the same `PATH`.
 
-## Шаг 3. Добавьте сервер в свой клиент
+## Step 3: Add a server to your client
 
-В интерфейсе воркера уже есть готовый фрагмент. Ниже пояснение, где он используется:
+The worker interface already has a ready-made fragment. Below is an explanation of where it is used:
 
-| Клиент | Куда вставить | Как проверить на стороне клиента |
+| Client | Where to insert | How to check on the client side |
 | --- | --- | --- |
-| Codex | `%USERPROFILE%\.codex\config.toml`, секция `[mcp_servers.agentboard_<slug>]` | `codex mcp list` |
-| Claude Code | `.mcp.json` в папке проекта | `claude mcp list` |
-| Gemini CLI | `%USERPROFILE%\.gemini\settings.json`, объект `mcpServers` | `/mcp list` в Gemini CLI |
-| Cursor | `.cursor\mcp.json` проекта | список MCP-серверов в настройках Cursor |
-| OpenCode | `opencode.json` проекта, объект `mcp` | список MCP-инструментов в OpenCode |
-| VS Code Copilot | `.vscode\mcp.json` проекта, объект `servers` | команда **MCP: List Servers** |
+| Codex | `%USERPROFILE%\.codex\config.toml`, section `[mcp_servers.agentboard_<slug>]` | `codex mcp list` |
+| Claude Code | `.mcp.json` in project folder | `claude mcp list` |
+| Gemini CLI | `%USERPROFILE%\.gemini\settings.json`, object `mcpServers` | `/mcp list` in Gemini CLI |
+| Cursor | `.cursor\mcp.json` project | list of MCP servers in Cursor settings |
+| OpenCode | `opencode.json` project, object `mcp` | list of MCP tools in OpenCode |
+| VS Code Copilot | `.vscode\mcp.json` project, object `servers` | command **MCP: List Servers** |
 
-Для Codex и Claude Code пример с проектом `C:\Projects\MyFirstProject` и воркером `codex`:
+For Codex and Claude Code, an example with the project `C:\Projects\MyFirstProject` and the worker `codex`:
 
 ```toml
 # %USERPROFILE%\.codex\config.toml
@@ -43,7 +43,6 @@ args = ["mcp", "--project", "C:\\Projects\\MyFirstProject", "--worker", "codex"]
 ```
 
 ```json
-// Содержимое .mcp.json (уберите эту строку-комментарий при копировании)
 {
   "mcpServers": {
     "agentboard_codex": {
@@ -55,16 +54,16 @@ args = ["mcp", "--project", "C:\\Projects\\MyFirstProject", "--worker", "codex"]
 }
 ```
 
-В JSON обратная косая черта Windows удваивается; готовый фрагмент из интерфейса делает это автоматически. Если используете `--db` с нестандартной базой, добавьте его в `args` MCP-конфигурации и укажите тот же путь, что при запуске `open`.
+In JSON, the Windows backslash is doubled; a ready-made fragment from the interface does this automatically. If you are using `--db` with a non-standard database, add it to the `args` of the MCP configuration and specify the same path as when running `open`.
 
-**Ollama** предоставляет локальную модель, но не заменяет MCP-клиент. Профиль **Ollama via OpenCode** генерирует MCP-настройку для OpenCode; отдельно настройте OpenCode на модель Ollama. Другой MCP-совместимый клиент с Ollama тоже подходит.
+**Ollama** provides a local model, but does not replace the MCP client. The **Ollama via OpenCode** profile generates an MCP configuration for OpenCode; separately configure OpenCode on the Ollama model. Another MCP-compatible client with Ollama is also suitable.
 
-## Шаг 4. Проверьте подключение
+## Step 4: Check your connection
 
-1. Откройте карточку воркера и нажмите **Check again**. **Server check** должен показать число MCP-инструментов. Это внутренняя проверка протокола и обнаружения инструментов сервера.
-2. Запустите или перезапустите AI-клиент после добавления файла конфигурации. Попросите его вызвать `get_my_board`.
-3. В AgentBoard появится **Client connected** и новая сессия в списке. Только это подтверждает подключение именно вашего клиента. Если есть инструменты, но клиент не подключён, проверьте путь к программе, имя файла конфигурации и его JSON/TOML-синтаксис.
+1. Open the worker card and click **Check again**. **Server check** should show the number of MCP tools. This is an internal protocol check and detection of server tools.
+2. Start or restart the AI ​​client after adding the configuration file. Have it call `get_my_board`.
+3. **Client connected** will appear in AgentBoard and a new session will appear in the list. Only this confirms the connection of your client. If there are tools, but the client is not connected, check the path to the program, the name of the configuration file and its JSON/TOML syntax.
 
-Начинайте рабочую сессию с `get_my_board`. AI не получает задачи из `Backlog` и `Complete`, даже если знает их ID. AI не может притвориться человеком и не имеет общей команды «перенести куда угодно». Работа с файловой системой вне AgentBoard зависит от возможностей и песочницы выбранного клиента.
+Start your work session with `get_my_board`. AI does not receive tasks from `Backlog` and `Complete`, even if it knows their ID. AI cannot pretend to be human and does not have a general “move anywhere” command. Working with the file system outside of AgentBoard depends on the capabilities and sandbox of the selected client.
 
-Официальные инструкции клиентов: [Codex](https://developers.openai.com/learn/docs-mcp), [Claude Code](https://docs.anthropic.com/en/docs/claude-code/mcp), [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/), [Cursor](https://prod.cursor.com/docs/cli/mcp), [OpenCode](https://opencode.ai/docs/mcp-servers/), [VS Code](https://code.visualstudio.com/docs/agent-customization/mcp-servers).
+Official customer instructions: [Codex](https://developers.openai.com/learn/docs-mcp), [Claude Code](https://docs.anthropic.com/en/docs/claude-code/mcp), [Gemini CLI](https://geminicli.com/docs/tools/mcp-server/), [Cursor](https://prod.cursor.com/docs/cli/mcp), [OpenCode](https://opencode.ai/docs/mcp-servers/), [VS Code](https://code.visualstudio.com/docs/agent-customization/mcp-servers).

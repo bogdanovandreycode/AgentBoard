@@ -33,3 +33,5 @@ Thumbs.db
 /.playwright-cli/
 /output/playwright/
 /release/
+/site/
+__pycache__/

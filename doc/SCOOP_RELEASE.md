@@ -1,19 +1,19 @@
-# Подготовка релиза для Scoop
+# Preparing a release for Scoop
 
-## Что уже автоматизировано
+## What is already automated
 
-`scripts/package-scoop.ps1 -Version 0.2.0` выполняет `npm ci`, сборку frontend, `go test ./...`, сборку Windows `agentboard.exe` с номером версии, создаёт ZIP и рассчитывает SHA-256 этого ZIP. Из **этого же** файла он создаёт `release/agentboard.json` с URL, хешем, CLI-shim, ярлыком, `checkver` и `autoupdate`. База живёт вне каталога установки, поэтому `persist` в manifest не нужен.
+`scripts/package-scoop.ps1 -Version 0.2.0` runs `npm ci`, frontend build, `go test ./...`, Windows build `agentboard.exe` with version number, creates a ZIP and calculates the SHA-256 of that ZIP. From **the same** file it creates `release/agentboard.json` with URL, hash, CLI-shim, shortcut, `checkver` and `autoupdate`. The database lives outside the installation directory, so `persist` in manifest is not needed.
 
-`.github/workflows/release.yml` на теге `vX.Y.Z` запускает ту же упаковку в Windows runner, собирает установщик Inno Setup и прикладывает ZIP, установщик и manifest к GitHub Release. Ручной запуск workflow создаёт только artifact для проверки, без публикации релиза.
+`.github/workflows/release.yml` on the `vX.Y.Z` tag runs the same packaging in the Windows runner, builds the Inno Setup installer and attaches the ZIP, installer and manifest to the GitHub Release. Manually running a workflow only creates an artifact for testing, without publishing a release.
 
-## Порядок публикации для сопровождающего
+## Posting order for maintainer
 
-1. Проверьте, что код, документация и номер версии готовы. Определите лицензию проекта: сейчас manifest указывает `Unknown`, потому что файл лицензии в репозитории не задан. Если вы выбираете лицензию, добавьте `LICENSE` и обновите `license` в скрипте перед релизом.
-2. Локально выполните `./scripts/package-scoop.ps1 -Version X.Y.Z`. Проверьте `release/agentboard-X.Y.Z-windows-amd64.zip`, `release/agentboard.json` и вывод `agentboard version` после распаковки. Не меняйте ZIP после расчёта хеша.
-3. Создайте и отправьте тег `vX.Y.Z`. GitHub Actions опубликует Release с ZIP, `agentboard-X.Y.Z-windows-amd64-setup.exe` и manifest. Проверьте все три файла на странице Release и SHA-256 ZIP из manifest.
-4. На чистой Windows-машине с Scoop выполните `scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/download/agentboard.json`, затем `agentboard version`, `agentboard init` и `agentboard open` в тестовой папке.
-5. Для постоянного канала обновлений поместите сгенерированный `agentboard.json` в собственный Scoop bucket или предложите его в подходящий публичный bucket. Проверяйте `scoop update agentboard` после следующего релиза. Команда установки из URL подходит для первого знакомства, а bucket удобнее для обновлений.
+1. Check that the code, documentation and version number are ready. Determine the project's license: manifest currently indicates `Unknown` because there is no license file defined in the repository. If you choose a license, add `LICENSE` and update `license` in the script before release.
+2. Run `./scripts/package-scoop.ps1 -Version X.Y.Z` locally. Check `release/agentboard-X.Y.Z-windows-amd64.zip`, `release/agentboard.json` and the output of `agentboard version` after extracting. Do not change the ZIP after the hash has been calculated.
+3. Create and submit the `vX.Y.Z` tag. GitHub Actions will publish a Release with a ZIP, `agentboard-X.Y.Z-windows-amd64-setup.exe` and manifest. Check all three files on the Release page and the SHA-256 ZIP from manifest.
+4. On a clean Windows machine with Scoop, run `scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/download/agentboard.json`, then `agentboard version`, `agentboard init` and `agentboard open` in the test folder.
+5. For a permanent update feed, place the generated `agentboard.json` in your own Scoop bucket or offer it in a suitable public bucket. Check `scoop update agentboard` after the next release. The installation command from a URL is suitable for the first acquaintance, while the bucket is more convenient for updates.
 
-Не подставляйте вручную случайное значение `hash`: Scoop сверяет содержимое скачанного ZIP.
+Do not manually substitute a random `hash` value: Scoop checks the contents of the downloaded ZIP.
 
-Для проверок manifest ориентируйтесь на [формат Scoop](https://github.com/ScoopInstaller/Scoop/wiki/App-Manifests), [создание manifest](https://github.com/ScoopInstaller/Scoop/wiki/Creating-an-app-manifest) и [autoupdate](https://github.com/ScoopInstaller/Scoop/wiki/App-Manifest-Autoupdate).
+For manifest checks, refer to [Scoop format](https://github.com/ScoopInstaller/Scoop/wiki/App-Manifests), [creating manifest](https://github.com/ScoopInstaller/Scoop/wiki/Creating-an-app-manifest) and [autoupdate](https://github.com/ScoopInstaller/Scoop/wiki/App-Manifest-Autoupdate).

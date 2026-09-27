@@ -1,37 +1,39 @@
 # AgentBoard
 
-AgentBoard — локальная доска задач, на которой человек и AI-воркеры работают с общими задачами, но имеют разные права. Приложение запускается одним файлом `agentboard.exe`, открывает веб-интерфейс в браузере и предоставляет воркерам отдельный MCP-сервер по `stdio`. Данные остаются на вашем компьютере.
+**Documentation:** [English](README.md) · [Русский](doc/ru/README.md) · [all 24 languages](doc/LANGUAGES.md)
 
-**[Начать с нуля](doc/START_HERE.md) · [Работа с задачами](doc/TASKS.md) · [Подключение AI через MCP](doc/WORKERS_MCP.md) · [Импорт JSON](doc/IMPORT.md) · [Настройки](doc/SETTINGS.md) · [Решение проблем](doc/TROUBLESHOOTING.md)**
+AgentBoard is a local task board where human and AI workers work on common tasks, but have different rights. The application is launched with a single file `agentboard.exe`, opens the web interface in the browser and provides workers with a separate MCP server via `stdio`. The data remains on your computer.
 
-## За пять минут
+**[Start from scratch](doc/START_HERE.md) · [Working with tasks](doc/TASKS.md) · [Connecting AI via MCP](doc/WORKERS_MCP.md) · [Import JSON](doc/IMPORT.md) · [Settings](doc/SETTINGS.md) · [Solving problems](doc/TROUBLESHOOTING.md)**
 
-1. Скачайте установщик `agentboard-VERSION-windows-amd64-setup.exe` из [Releases](https://github.com/bogdanovandreycode/AgentBoard/releases). Он предложит папку (по умолчанию `C:\AI\AgentBoard`) и добавит её в `PATH`. Доступны также Scoop и ZIP.
-2. Откройте PowerShell в папке вашего проекта, например `C:\Projects\MyApp`.
-3. Выполните `agentboard init` (для ZIP: полный путь к `agentboard.exe` и `init`).
-4. Выполните `agentboard open`. Откроется `http://127.0.0.1:7337`.
-5. Добавьте задачу кнопкой **New task**. Для AI-сотрудника откройте **Workers → Add worker**, выберите профиль клиента и скопируйте MCP-конфигурацию.
+## In five minutes
 
-Если у вас ещё нет папки проекта, создайте её в Проводнике Windows. Проектом может быть любая папка, даже без Git и кода.
+1. Download the `agentboard-VERSION-windows-amd64-setup.exe` installer from [Releases](https://github.com/bogdanovandreycode/AgentBoard/releases). It will suggest a folder (by default `C:\AI\AgentBoard`) and add it to `PATH`. Scoop and ZIP are also available.
+2. Open PowerShell in your project folder, for example `C:\Projects\MyApp`.
+3. Run `agentboard init` (for ZIP: full path to `agentboard.exe` and `init`).
+4. Execute `agentboard open`. This will open `http://127.0.0.1:7337`.
+5. Add a task using the **New task** button. For an AI worker, open **Workers → Add worker**, select the client profile and copy the MCP configuration.
 
-## Установка через Scoop
+If you don't already have a project folder, create one in Windows Explorer. A project can be any folder, even without Git and code.
 
-В PowerShell с уже установленным [Scoop](https://scoop.sh/) после выхода релиза:
+## Installation via Scoop
+
+In PowerShell with [Scoop](https://scoop.sh/) already installed after the release:
 
 ```powershell
 scoop install https://github.com/bogdanovandreycode/AgentBoard/releases/latest/download/agentboard.json
 agentboard version
 ```
 
-Для разработчиков есть [сборка из исходников](doc/INSTALL.md). Release workflow создаёт установщик, ZIP и Scoop manifest с SHA-256 из одного и того же артефакта. Обновление установленной через Scoop версии: `scoop update agentboard` после добавления manifest в bucket; подробности — [подготовка релиза](doc/SCOOP_RELEASE.md).
+For developers there is [build from source](doc/INSTALL.md). The release workflow creates an installer, ZIP and Scoop manifest with SHA-256 from the same artifact. Updating the version installed via Scoop: `scoop update agentboard` after adding manifest to the bucket; details - [release preparation](doc/SCOOP_RELEASE.md).
 
-## Как устроена доска
+## How the board is structured
 
 `Backlog → Features → In progress → Testing → Verification → Complete`
 
-Человек может перемещать задачи по доске. AI может двигаться только `Features → In progress → Testing → Verification`; финальное принятие в `Complete` выполняет человек. Пользовательские колонки предназначены для человека: задача в них остаётся в состоянии `Backlog` для MCP. Режимы тестирования: AI, Human и Hybrid. История, тесты, артефакты и затраты AI прикреплены к задаче.
+A person can move tasks around the board. AI can only move `Features → In progress → Testing → Verification`; the final acceptance in `Complete` is performed by a human. User columns are intended for humans: the task in them remains in the `Backlog` state for MCP. Test modes: AI, Human and Hybrid. History, tests, artifacts and AI costs are attached to the task.
 
-## Команды
+## Commands
 
 ```text
 agentboard init [--db PATH] [project-path]
@@ -41,12 +43,10 @@ agentboard mcp --project PROJECT_PATH --worker WORKER_SLUG [--db PATH]
 agentboard version
 ```
 
-`init` регистрирует папку и записывает туда только `.agentboard/project.json`. Рабочие данные SQLite находятся в каталоге конфигурации пользователя Windows (`%AppData%\AgentBoard\agentboard.db`), вне проекта и вне установки Scoop. Удаление или обновление пакета не должно удалять эти данные. Перед переносом на другой компьютер сделайте копию базы при остановленном AgentBoard.
+`init` registers the folder and writes only `.agentboard/project.json` to it. Application data is stored in the Windows user configuration directory (`%AppData%\AgentBoard\agentboard.db`), outside the project and Scoop installation. Removing or updating the package does not remove this data. Before transferring it to another computer, stop AgentBoard and copy the database.
 
-Воркеры — логические учётные записи; AgentBoard сам не запускает Codex, Claude или другой AI-клиент. Клиент запускает локальный MCP-процесс для конкретного воркера. MCP является границей прав приложения, а для изоляции файлов используйте песочницу AI-клиента.
+Workers - logical accounts; AgentBoard itself does not run Codex, Claude or any other AI client. The client starts a local MCP process for a specific worker. MCP is the application permission boundary, and for file isolation, use the AI ​​client sandbox.
 
-## Для разработчиков
+## For developers
 
-Стек: Go, SQLite, официальный MCP Go SDK, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Сначала собирайте frontend, затем Go: `./scripts/build.ps1`. Веб-файлы включаются в бинарник через `go:embed`. Архитектура и API описаны в [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).
-
-Documentation in Russian is under [`doc/`](doc/START_HERE.md). The app is local-first, ships as one Windows executable, and exposes a worker-scoped stdio MCP server. English UI is available in Settings.
+Stack: Go, SQLite, official MCP Go SDK, React, TypeScript, Vite, PrimeReact, TanStack Query, dnd-kit. Build frontend first, then Go: `./scripts/build.ps1`. Web files are included in the binary via `go:embed`. The architecture and API are described in [doc/ARCHITECTURE.md](doc/ARCHITECTURE.md).

@@ -1,19 +1,19 @@
-# Настройки
+# Settings
 
-Откройте пункт **Settings** в боковом меню выбранного проекта. Изменения сохраняются кнопкой **Save settings** и хранятся для проекта в базе AgentBoard.
+Open **Settings** in the side menu of the selected project. Changes are saved with the **Save settings** button and stored for the project in the AgentBoard database.
 
-## Язык и внешний вид
+## Language and appearance
 
-Поле **Language** открывает список с поиском и отметкой выбранного языка. Доступны языки со скриншотов: арабский, португальский (Бразилия), китайский упрощённый, чешский, датский, нидерландский, английский, финский, французский, немецкий, итальянский, японский, корейский, норвежский букмол, польский, русский, испанский, шведский, турецкий, украинский, вьетнамский; дополнительно белорусский, румынский и болгарский. **Follow system** берёт язык браузера. Основные подписи переведены вручную, остальные строки UI имеют предварительный автоматический перевод. Перед публичным релизом желательно вычитать переводы носителями языков; названия клиента, команды, JSON-поля и пользовательские данные остаются без перевода.
+The **Language** field is a searchable menu. Its default, **Follow system**, uses the browser's language. The interface supports the languages listed on the [documentation languages](LANGUAGES.md) page. Some translations are automatic and may need review by native speakers. Client names, commands, JSON fields and user data remain unchanged.
 
-**Color scheme**: Dark (исходная тема), Light, Black, Ubuntu и Windows. **Time zone** управляет отображением дат; данные продолжают храниться в UTC. **System time zone** использует настройки компьютера.
+**Color scheme**: Dark (original theme), Light, Black, Ubuntu and Windows. **Time zone** controls the display of dates; the data continues to be stored in UTC. **System time zone** uses computer settings.
 
-## Колонки
+## Columns
 
-Четыре этапа `Features`, `In progress`, `Testing`, `Verification` закреплены в этом порядке: их нельзя переименовать или удалить. Другие колонки можно переставить доступными стрелками. Введите название и нажмите **Add column**, чтобы создать пользовательскую колонку. Она предназначена для задач человека: AI видит такую задачу как `Backlog` и не получает её через MCP. Удаление колонки при сохранении переносит её задачи в обычный `Backlog`.
+The four stages `Features`, `In progress`, `Testing`, `Verification` are fixed in this order: they cannot be renamed or deleted. Other columns can be rearranged using the available arrows. Enter a name and click **Add column** to create a custom column. It is intended for human tasks: AI sees such a task as `Backlog` and does not receive it through MCP. Removing a column while saving transfers its tasks to the regular `Backlog`.
 
-## Веб и MCP
+## Web and MCP
 
-**Board refresh** задаёт частоту обновления доски и карточек в секундах (1–60). **Worker refresh** обновляет статус воркеров (2–120 секунд). Это опрос веб-интерфейса, а не частота запуска AI. Воркеры не запускаются автоматически.
+**Board refresh** sets the refresh rate of the board and cards in seconds (1–60). **Worker refresh** updates the status of workers (2–120 seconds). This is web interface polling, not AI trigger frequency. Workers do not start automatically.
 
-Адрес веб-сервера задаётся при запуске CLI, например `agentboard open --addr 127.0.0.1:7444`. Для смены адреса сервер нужно перезапустить. По умолчанию используется `127.0.0.1:7337`. MCP работает через отдельную локальную команду `agentboard mcp --project ... --worker ...` и не зависит от веб-порта. Для нестандартной базы укажите одинаковый `--db` во всех командах. Конфигурацию каждого клиента копируйте из карточки воркера.
+The web server address is set when starting the CLI, for example `agentboard open --addr 127.0.0.1:7444`. To change the address, the server must be restarted. The default is `127.0.0.1:7337`. MCP works through a separate local command `agentboard mcp --project ... --worker ...` and is independent of the web port. For a non-standard database, specify the same `--db` in all commands. Copy the configuration of each client from the worker card.

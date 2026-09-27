@@ -1,34 +1,34 @@
-# Архитектура и API
+# Architecture and API
 
-AgentBoard — локальный процесс Go с SQLite. HTTP API для человека, MCP-адаптер для AI и веб-интерфейс используют общую сервисную логику. SQLite — источник состояния; frontend не обходит сервер. AI-инструменты имеют отдельную поверхность прав, а состояние `Backlog`/`Complete` в MCP недоступно. Запись истории от `System` создаёт само приложение.
+AgentBoard runs locally as a Go process backed by SQLite. The Human HTTP API, AI MCP adapter and web interface use the same core services. SQLite is the source of truth. AI tools have separate permissions and cannot access `Backlog` or `Complete`. Only AgentBoard creates `System` history entries.
 
-## Компоненты
+## Components
 
-- `cmd/agentboard` — CLI `init`, `open`, `serve`, `mcp`, `version`.
-- `internal/core` — модели и ошибки домена.
-- `internal/service` — переходы задач, разрешения, импорт и настройки.
-- `internal/persistence` — SQLite и миграции.
-- `internal/httpapi` — Human HTTP API.
-- `internal/mcpserver` — MCP-инструменты отдельного воркера.
-- `web` — React/TypeScript UI; сборка попадает в `internal/webui/dist` и включается в EXE.
+- `cmd/agentboard` - CLI `init`, `open`, `serve`, `mcp`, `version`.
+- `internal/core` - domain models and errors.
+- `internal/service` - task transitions, permissions, imports and settings.
+- `internal/persistence` - SQLite and migrations.
+- `internal/httpapi` - Human HTTP API.
+- `internal/mcpserver` - MCP tools for each worker.
+- `web` - React/TypeScript UI; its build is copied to `internal/webui/dist` and embedded in the EXE.
 
-## Основные HTTP-маршруты
+## Basic HTTP routes
 
-| Метод и путь | Назначение |
+| Method and path | Purpose |
 | --- | --- |
-| `GET /api/health` | Проверка сервера. |
-| `GET /api/projects` | Зарегистрированные проекты. |
-| `GET /api/projects/{id}/board` | Доска проекта. |
-| `GET/PUT /api/projects/{id}/settings` | Настройки, порядок и названия колонок. |
-| `POST /api/projects/{id}/tasks` | Создать задачу. |
-| `POST /api/projects/{id}/tasks/import` | Атомарно импортировать JSON версии 1. |
-| `GET/PATCH/DELETE /api/tasks/{id}` | Карточка, изменение, удаление. |
-| `POST /api/tasks/{id}/move` | Перемещение человеком. |
-| `GET/POST /api/projects/{id}/workers` | Список и создание воркера. |
-| `GET /api/workers/{id}/mcp/check` | Внутренняя проверка MCP handshake и инструментов. |
-| `GET /api/workers/{id}/sessions` | Диагностика сессий. |
-| `GET/POST /api/projects/{id}/properties` | Пользовательские свойства. |
+| `GET /api/health` | Server check. |
+| `GET /api/projects` | Registered projects. |
+| `GET /api/projects/{id}/board` | Project board. |
+| `GET/PUT /api/projects/{id}/settings` | Settings, order and names of columns. |
+| `POST /api/projects/{id}/tasks` | Create a task. |
+| `POST /api/projects/{id}/tasks/import` | Atomically import JSON version 1. |
+| `GET/PATCH/DELETE /api/tasks/{id}` | Card, change, delete. |
+| `POST /api/tasks/{id}/move` | Move a task as a human. |
+| `GET/POST /api/projects/{id}/workers` | List and creation of a worker. |
+| `GET /api/workers/{id}/mcp/check` | Internal testing of MCP handshake and tools. |
+| `GET /api/workers/{id}/sessions` | Session diagnostics. |
+| `GET/POST /api/projects/{id}/properties` | Custom properties. |
 
-HTTP предназначен для локального доверенного пользователя. Не публикуйте веб-порт в Интернет без собственной аутентификации, сетевых ограничений и HTTPS. MCP-сервер запускается по `stdio` для конкретного проекта и воркера; начинайте с `get_my_board`. Его разрешения ограничивают действия внутри AgentBoard, но не заменяют песочницу AI-клиента для файловой системы.
+HTTP is intended for a trusted local user. Do not expose the web port to the Internet without authentication, network restrictions and HTTPS. The MCP server runs over `stdio` for a specific project and worker; start with `get_my_board`. Its permissions apply within AgentBoard and do not replace the AI client's filesystem sandbox.
 
-Пользовательские колонки хранятся отдельно от `tasks.state`: задачу в такой колонке core держит в `backlog`, а `tasks.board_column` определяет место на Human-доске. Это сохраняет прежнюю модель AI-переходов. Удаление колонки очищает `board_column` задач.
+Custom columns are stored separately from `tasks.state`: the core keeps these tasks in `backlog`, while `tasks.board_column` determines their position on the Human board. Removing a column clears `board_column` on its tasks.

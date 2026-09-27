@@ -1,35 +1,35 @@
-# Работа с задачами
+# Working with tasks
 
-## Добавить задачу
+## Add task
 
-На вкладке **Board** нажмите **New task**. Заполните название и описание. Описание и инструкции тестирования поддерживают Markdown: выделите текст и используйте панель форматирования для жирного, курсива, ссылки и списка. Нажмите **Save**.
+On the **Board** tab, click **New task**. Fill in the title and description. The description and testing instructions support Markdown: highlight text and use the formatting bar for bold, italic, link, and list. Click **Save**.
 
-Поля:
+Fields:
 
-| Поле | Что означает |
+| Field | Purpose |
 | --- | --- |
-| Title | Короткое название задачи. |
-| Description | Что надо сделать и как понять, что работа готова. |
-| State | Этап работы; новая задача обычно начинается в `Backlog`. |
-| Priority | `critical`, `high`, `medium` или `low`. |
-| Responsible | Человек, конкретный воркер или без назначения. |
-| Testing mode | `AI` — проверяет AI; `Human` — проверяет человек; `Hybrid` — оба. |
-| Dependencies | Задачи, которые должны быть выполнены раньше. |
-| AI/Human test instructions | Указания соответствующему проверяющему. |
-| Custom properties | Дополнительные поля, созданные во вкладке **Properties**. |
+| Title | Short name of the task. |
+| Description | What needs to be done and how to understand that the work is ready. |
+| State | Work stage; a new task usually starts in `Backlog`. |
+| Priority | `critical`, `high`, `medium` or `low`. |
+| Responsible | A human, a specific worker or unassigned. |
+| Testing mode | `AI` - AI testing; `Human` - human testing; `Hybrid` - both. |
+| Dependencies | Tasks that should be completed earlier. |
+| AI/Human test instructions | Instructions to the appropriate reviewer. |
+| Custom properties | Additional fields created in the **Properties** tab. |
 
-Для AI-задачи сначала создайте воркера, выберите его в Responsible, затем перенесите карточку в `Features`. AI видит только назначенные ему задачи на четырёх этапах от `Features` до `Verification`.
+For an AI task, first create a worker, select it in Responsible, then transfer the card to `Features`. AI sees only the tasks assigned to it at four stages from `Features` to `Verification`.
 
-## Передвинуть задачу
+## Move task
 
-Перетащите карточку между колонками. Можно переключиться между видом «все колонки» и широкими колонками с горизонтальной прокруткой. `Backlog` и `Complete` управляются человеком. AI может продвигать задачу только `Features → In progress → Testing → Verification` через специальные MCP-инструменты. Задача с невыполненным ручным тестированием не должна пройти AI-проверку.
+Drag the card between the columns. You can switch between an all-columns view and wide columns with horizontal scrolling. `Backlog` and `Complete` are human managed. AI can only advance a task `Features → In progress → Testing → Verification` through special MCP tools. A task with uncompleted manual testing should not pass AI verification.
 
-## Карточка задачи
+## Task card
 
-Нажмите карточку, чтобы увидеть описание, ответственного, тестовые инструкции и вкладки истории, тестов, артефактов и затрат AI. **Edit task** меняет содержание. Комментарий человека добавляется к общей истории. Поиск в верхних фильтрах ищет по названию, описанию, ID и воркеру; отдельная кнопка открывает большой поиск.
+Click a card to see the description, assignee, test instructions, history, tests, artifacts and AI costs. **Edit task** changes its content. Human comments are added to the shared history. The search field matches titles, descriptions, IDs and workers; a separate button opens expanded search.
 
-## Колонки и свойства
+## Columns and properties
 
-Во вкладке **Settings** можно менять порядок доступных человеку колонок и добавлять свои. Четыре этапа AI фиксированы и идут в прежнем порядке. Пользовательская колонка — место для отложенных человеком задач: для AI такая задача имеет состояние `Backlog`. При удалении колонки её задачи возвращаются в обычный `Backlog`.
+In the **Settings** tab you can change the order of columns available to a person and add your own. The four AI stages are fixed and proceed in the same order. The user column is a place for tasks postponed by a person: for AI, such a task has the `Backlog` state. When a column is deleted, its tasks return to the normal `Backlog`.
 
-Во вкладке **Properties** можно добавить поля типа текст, число, флаг, дата, выбор и URL. `Human only` скрывает поле от AI; `Agent read` разрешает чтение, `Agent read/write` также разрешает запись через поддерживаемые инструменты. Это не меняет права AI на этапы задачи.
+In the **Properties** tab you can add fields such as text, number, flag, date, selection and URL. `Human only` hides the field from AI; `Agent read` allows reading, `Agent read/write` also allows writing through supported tools. This does not change the AI's rights to the task steps.
