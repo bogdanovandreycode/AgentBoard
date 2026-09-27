@@ -1,0 +1,66 @@
+name: Windows release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build without publishing (for example 0.2.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Validate version
+        shell: pwsh
+        run: |
+          $version = if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') { '${{ inputs.version }}' } else { $env:GITHUB_REF_NAME.Substring(1) }
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw "Invalid release version: $version" }
+          "RELEASE_VERSION=$version" >> $env:GITHUB_ENV
+      - name: Build and test package
+        shell: pwsh
+        run: ./scripts/package-scoop.ps1 -Version $env:RELEASE_VERSION
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup installation failed' }
+          & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' "/DAppVersion=$env:RELEASE_VERSION" './scripts/agentboard.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+      - name: Upload verification artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentboard-windows-${{ env.RELEASE_VERSION }}
+          path: |
+            release/agentboard-*-windows-amd64.zip
+            release/agentboard-*-windows-amd64-setup.exe
+            release/agentboard.json
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            "release/agentboard-$env:RELEASE_VERSION-windows-amd64.zip" `
+            "release/agentboard-$env:RELEASE_VERSION-windows-amd64-setup.exe" `
+            'release/agentboard.json' `
+            --verify-tag --generate-notes --title "AgentBoard $env:RELEASE_VERSION"
+
