@@ -4,8 +4,7 @@ import { InputText } from "primereact/inputtext";
 import { Message } from "primereact/message";
 import { TabMenu } from "primereact/tabmenu";
 import { SelectField } from "./SelectField";
-import { t } from "./i18n";
-import { LanguagePicker } from "./LanguagePicker";
+import { languages, setLanguage, t } from "./i18n";
 import { builtInColumns, lockedColumns, type ProjectSettings } from "./settings";
 import moment from "moment-timezone";
 
@@ -38,10 +37,12 @@ export function SettingsPage({ value, onSave, saving, error, projectPath }: {
   };
   return <div className="settings-page">
     <TabMenu className="settings-tabs" model={[{ label: t("General") }, { label: t("Columns") }, { label: "MCP" }]} activeIndex={activeTab} onTabChange={(event) => setActiveTab(event.index)} />
-    {activeTab === 0 && <section className="settings-panel">
+    {activeTab === 0 && <section className="settings-panel settings-tab-content">
       <h2>{t("Appearance and language")}</h2>
       <div className="settings-grid">
-        <label>{t("Language")}<LanguagePicker value={form.language} onChange={(language) => setForm({ ...form, language })} /></label>
+        <label>{t("Language")}<SelectField filter value={form.language} onChange={(e) => { setLanguage(e.target.value); setForm({ ...form, language: e.target.value }); }}>
+          {languages.map(([code, name]) => <option key={code} value={code}>{code === "system" ? t(name) : name}</option>)}
+        </SelectField></label>
         <label>{t("Color scheme")}<SelectField value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value as ProjectSettings["theme"] })}>
           {themes.map((theme) => <option key={theme} value={theme}>{t(theme[0].toUpperCase() + theme.slice(1))}</option>)}
         </SelectField></label>
@@ -51,9 +52,9 @@ export function SettingsPage({ value, onSave, saving, error, projectPath }: {
         </label>
       </div>
     </section>}
-    {activeTab === 1 && <section className="settings-panel">
+    {activeTab === 1 && <section className="settings-panel settings-tab-content">
       <h2>{t("Board columns")}</h2>
-      <p>{t("AI workflow columns are fixed. Custom columns are human-only; moving a task there places it in Backlog for the AI workflow.")}</p>
+      <Message className="settings-notice" severity="info" text={t("AI workflow columns are fixed. Custom columns are human-only; moving a task there places it in Backlog for the AI workflow.")} />
       <div className="settings-columns">
         {form.columns.map((column, index) => <div className="settings-column" key={column.id}>
           <span>{t(column.name)}</span><small>{lockedColumns.has(column.id) ? t("AI workflow") : column.id.startsWith("custom-") ? t("Custom") : t("Human workflow")}</small>
@@ -65,16 +66,16 @@ export function SettingsPage({ value, onSave, saving, error, projectPath }: {
         </div>)}
       </div>
       <div className="settings-add"><InputText placeholder={t("New column name")} value={newColumn} onChange={(e) => setNewColumn(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") addColumn(); }} /><Button label={t("Add column")} onClick={addColumn} disabled={!newColumn.trim()} /></div>
-      <p>{t("Deleting a custom column returns its tasks to Backlog when you save.")}</p>
+      <Message className="settings-notice" severity="warn" text={t("Deleting a custom column returns its tasks to Backlog when you save.")} />
     </section>}
-    {activeTab === 2 && <section className="settings-panel">
+    {activeTab === 2 && <section className="settings-panel settings-tab-content">
       <h2>{t("Web and MCP")}</h2>
       <div className="settings-grid">
         <label>{t("Board refresh (seconds)")}<InputText type="number" min={1} max={60} value={form.boardRefreshSeconds.toString()} onChange={(e) => setForm({ ...form, boardRefreshSeconds: Number(e.target.value) })} /></label>
         <label>{t("Worker refresh (seconds)")}<InputText type="number" min={2} max={120} value={form.workerRefreshSeconds.toString()} onChange={(e) => setForm({ ...form, workerRefreshSeconds: Number(e.target.value) })} /></label>
       </div>
-      <p>{t("The web server listens on 127.0.0.1:7337 by default. Change the address with --addr when starting agentboard open or serve; restart is required.")}</p>
-      <p>{t("Each worker uses its own MCP command. Open a worker to copy its client configuration and check the connection.")}</p>
+      <Message className="settings-notice" severity="warn" text={t("The web server listens on 127.0.0.1:7337 by default. Change the address with --addr when starting agentboard open or serve; restart is required.")} />
+      <Message className="settings-notice" severity="info" text={t("Each worker uses its own MCP command. Open a worker to copy its client configuration and check the connection.")} />
       <code className="settings-command">agentboard mcp --project "{projectPath}" --worker WORKER_SLUG</code>
     </section>}
     {error && <Message severity="error" text={error} />}
