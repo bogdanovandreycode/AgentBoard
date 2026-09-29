@@ -1,4 +1,5 @@
 # AgentBoard
+[![M8ven Score](https://m8ven.ai/badge/mcp/bogdanovandreycode/agentboard)](https://m8ven.ai/mcp/bogdanovandreycode/agentboard)
 
 ![AgentBoard project preview](assets/social-preview.png)
 
