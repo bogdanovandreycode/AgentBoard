@@ -29,6 +29,7 @@ import { Message } from "primereact/message";
 import { ProgressSpinner } from "primereact/progressspinner";
 import { ConfirmDialog } from "primereact/confirmdialog";
 import { Toast } from "primereact/toast";
+import { FileUpload } from "primereact/fileupload";
 import {
   Bot,
   Columns3,
@@ -580,14 +581,14 @@ type ImportFile = {
 };
 
 function ImportTasks({ projectID, workers, workersLoading, refresh }: { projectID: string; workers: Worker[]; workersLoading: boolean; refresh: () => void }) {
+  const fileUpload = useRef<FileUpload>(null);
   const properties = useQuery({ queryKey: ["properties", projectID], queryFn: () => api<PropertyDef[]>(`/projects/${projectID}/properties`) });
-  const [fileName, setFileName] = useState("");
   const [document, setDocument] = useState<ImportFile>();
   const [error, setError] = useState("");
   const [result, setResult] = useState("");
   const importMutation = useMutation({
     mutationFn: (input: ImportFile) => api<{ imported: number }>(`/projects/${projectID}/tasks/import`, { method: "POST", body: JSON.stringify(input) }),
-    onSuccess: (response) => { setResult(`${t("Imported")} ${response.imported} ${t("tasks")}.`); setDocument(undefined); setFileName(""); refresh(); },
+    onSuccess: (response) => { fileUpload.current?.clear(); setResult(`${t("Imported")} ${response.imported} ${t("tasks")}.`); setDocument(undefined); refresh(); },
   });
   const firstWorker = workers.find((worker) => worker.Enabled);
   const template: ImportFile = { version: 1, tasks: [
@@ -603,9 +604,10 @@ function ImportTasks({ projectID, workers, workersLoading, refresh }: { projectI
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const readFile = async (file?: File) => {
-    setError(""); setResult(""); setDocument(undefined); setFileName(file?.name || "");
+    setError(""); setResult(""); setDocument(undefined);
     if (!file) return;
     try {
+      if (!file.name.toLowerCase().endsWith(".json")) throw new Error(t("Choose a JSON file."));
       const parsed: unknown = JSON.parse(await file.text());
       if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as ImportFile).tasks) || (parsed as ImportFile).version !== 1) throw new Error("Expected { version: 1, tasks: [...] }.");
       setDocument(parsed as ImportFile);
@@ -616,8 +618,16 @@ function ImportTasks({ projectID, workers, workersLoading, refresh }: { projectI
     <div className="import-grid"><section className="import-panel"><h3>{t("1. Download a current template")}</h3><p>{t("The template includes this project's current custom property names and an available worker slug. It updates when Workers or Properties change.")}</p><Button label={t("Download JSON template")} icon="pi pi-download" onClick={download} disabled={properties.isLoading || workersLoading} />
       <h3>{t("Format")}</h3><ul><li><code>version</code> {t("must be")} <code>1</code>; <code>tasks</code> {t("contains 1–1000 objects.")}</li><li><code>title</code> {t("is required. State: backlog, features, in_progress, testing, verification, complete.")}</li><li>{t("Priority: critical, high, medium, low. Testing: ai, human, hybrid.")}</li><li>{t("Use")} <code>assignee.type</code> = unassigned, human, or worker. {t("For workers, set")} <code>worker</code> {t("to an existing slug or ID.")}</li><li><code>properties</code> {t("maps current property names or IDs to string values.")}</li><li>{t("Give tasks a unique")} <code>key</code> {t("to use")} <code>depends_on</code> {t("links within this file. IDs are generated on import.")}</li></ul>
       <p>{t("All imported tasks are created by Human and receive a System creation event.")}</p>
-    </section><section className="import-panel"><h3>{t("2. Choose a file")}</h3><input type="file" accept=".json,application/json" aria-label={t("Import JSON file")} onChange={(e) => void readFile(e.target.files?.[0])} />
-      {fileName && <p>{t("Selected:")} <strong>{fileName}</strong></p>}
+    </section><section className="import-panel"><h3>{t("2. Choose a file")}</h3><FileUpload ref={fileUpload} className="import-file-upload" name="importFile" accept=".json,application/json" customUpload
+      chooseLabel={t("Choose JSON file")} chooseOptions={{ icon: "pi pi-folder-open" }}
+      headerTemplate={({ chooseButton }) => <div className="import-upload-header">{chooseButton}</div>}
+      emptyTemplate={<div className="import-drop-hint"><i className="pi pi-file-import" aria-hidden="true" /><strong>{t("Drag a JSON file here")}</strong><span>{t("or click Choose JSON file above")}</span></div>}
+      itemTemplate={(_file, options) => <div className="import-selected-file"><i className="pi pi-file" aria-hidden="true" />{options.fileNameElement}<small>{options.formatSize}</small><Button icon="pi pi-times" text severity="secondary" aria-label={t("Remove selected file")} onClick={options.onRemove} /></div>}
+      onSelect={(event) => { if (event.files[0]) void readFile(event.files[0]); }}
+      onValidationFail={() => { setDocument(undefined); setError(t("Choose a JSON file.")); }}
+      onRemove={() => { setDocument(undefined); setError(""); }}
+      onClear={() => { setDocument(undefined); setError(""); }}
+      pt={{ input: { "aria-label": t("Import JSON file") } }} />
       {document && <p>{t("Ready to import")} <strong>{document.tasks.length}</strong> {t("tasks")}.</p>}
       {error && <Message severity="error" text={error} />}
       {importMutation.error && <Message severity="error" text={importMutation.error.message} />}
@@ -793,7 +803,7 @@ function TaskForm({
       },
       onError: (error) => notify("error", t("Save failed"), error.message),
     });
-  if (!definitions.data || !board.data) {
+  if (definitions.data === undefined || !board.data) {
     const error = definitions.error || board.error;
     return error ? <Modal title={t("Create task")} close={close}><Message severity="error" text={error.message} /></Modal> : null;
   }
@@ -1136,7 +1146,7 @@ function TaskEditForm({
     allTasks = Object.values(board.data || {})
       .flat()
       .filter((t) => t.ID !== task.ID);
-  if (!definitions.data || !board.data) {
+  if (definitions.data === undefined || !board.data) {
     const error = definitions.error || board.error;
     return error ? <Modal title={t("Edit task")} close={close}><Message severity="error" text={error.message} /></Modal> : null;
   }

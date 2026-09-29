@@ -193,7 +193,7 @@ func (s *Service) ListPropertyDefinitions(ctx context.Context, projectID string)
 		return nil, err
 	}
 	defer rows.Close()
-	var out []core.PropertyDefinition
+	out := make([]core.PropertyDefinition, 0)
 	for rows.Next() {
 		var d core.PropertyDefinition
 		if err = rows.Scan(&d.ID, &d.ProjectID, &d.Name, &d.Type, &d.Options, &d.Visibility, &d.CreatedAt, &d.UpdatedAt, &d.Placeholder, &d.Regex, &d.DefaultValue); err != nil {

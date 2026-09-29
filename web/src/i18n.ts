@@ -54,6 +54,7 @@ const russianExtra: Record<string, string> = {
   "The web server listens on 127.0.0.1:7337 by default. Change the address with --addr when starting agentboard open or serve; restart is required.": "По умолчанию веб-сервер доступен на 127.0.0.1:7337. Адрес меняется флагом --addr при запуске agentboard open или serve; потребуется перезапуск.",
   "Each worker uses its own MCP command. Open a worker to copy its client configuration and check the connection.": "У каждого воркера своя команда MCP. Откройте воркера, чтобы скопировать конфигурацию клиента и проверить подключение.",
   "Board layout": "Режим отображения доски", "All priority": "Любой приоритет", "All testing": "Любое тестирование", "All responsible": "Все ответственные", "All origins": "Все источники", "Drop tasks here": "Перетащите задачи сюда", "MCP diagnostics": "Диагностика MCP", "No description": "Без описания", "No matching tasks": "Подходящих задач нет", "unassigned": "Не назначено", "Disabled": "Отключён", "Never": "Никогда",
+  "Choose JSON file": "Выбрать JSON-файл", "Drag a JSON file here": "Перетащите JSON-файл сюда", "or click Choose JSON file above": "или нажмите «Выбрать JSON-файл» выше", "Choose a JSON file.": "Выберите JSON-файл.", "Remove selected file": "Убрать выбранный файл",
 };
 const localeOverrides: Record<string, Record<string, string>> = {
   fr: { Backlog: "À faire", Features: "Fonctionnalités", "Drag task": "Déplacer la tâche", "Open task": "Ouvrir la tâche" },

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/bogdanovandreycode/agentboard/internal/persistence"
@@ -25,6 +26,11 @@ func TestHumanAPIProjectWorkerTaskFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := New(service.New(st))
+	properties := httptest.NewRecorder()
+	h.ServeHTTP(properties, httptest.NewRequest("GET", "/api/projects/"+p.ID+"/properties", nil))
+	if properties.Code != 200 || strings.TrimSpace(properties.Body.String()) != "[]" {
+		t.Fatalf("empty properties must be an array: %d %s", properties.Code, properties.Body.String())
+	}
 	call := func(method, path, body string) int {
 		r := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 		r.Header.Set("Content-Type", "application/json")
