@@ -16,6 +16,7 @@ AgentBoard is a local task board where human and AI workers work on common tasks
 - A local project board with task search, JSON import, custom columns and properties.
 - Worker-specific MCP access with explicit AI transitions and human final acceptance.
 - Shared task history, testing instructions, artifacts, AI costs and worker connection diagnostics.
+- Image and file attachments in Markdown descriptions and comments, with WebP image storage and upload/read access for AI workers over MCP.
 - A Windows installer, ZIP and Scoop manifest; the web UI is embedded in the executable.
 
 AgentBoard is designed for a trusted local user. It does not host projects or start AI clients for you; connect an MCP-compatible client to a worker when needed.
@@ -57,9 +58,11 @@ agentboard mcp --project PROJECT_PATH --worker WORKER_SLUG [--db PATH]
 agentboard version
 ```
 
-`init` registers the folder and writes only `.agentboard/project.json` to it. Application data is stored in the Windows user configuration directory (`%AppData%\AgentBoard\agentboard.db`), outside the project and Scoop installation. Removing or updating the package does not remove this data. Before transferring it to another computer, stop AgentBoard and copy the database.
+`init` registers the folder and writes only `.agentboard/project.json` to it. Application data is stored in the Windows user configuration directory (`%AppData%\AgentBoard\agentboard.db`), outside the project and Scoop installation. Attached images are converted to lossless WebP in `%AppData%\AgentBoard\images`; other files are stored unchanged in `%AppData%\AgentBoard\files`. SQLite stores references and metadata, never attachment bytes. A custom `--db` places both folders beside that database. Removing or updating the package does not remove this data. Before transferring it to another computer, stop AgentBoard and copy the database and both attachment folders.
 
 Workers - logical accounts; AgentBoard itself does not run Codex, Claude or any other AI client. The client starts a local MCP process for a specific worker. MCP is the application permission boundary, and for file isolation, use the AI ​​client sandbox.
+
+MCP screenshot tools: `get_task` returns native image content for screenshots linked in the assigned task description, testing instructions and comments (up to eight images and 8 MiB per automatic preview). `get_image(task_id, image_id)` opens an individual referenced screenshot when a preview is omitted. To share a screenshot, call `upload_image` with `task_id` and either a local `path` or `base64` image data (maximum 20 MiB), then include its returned `markdown` link in `add_history` content. Uploads are converted to WebP; the same worker and task visibility restrictions apply to image access.
 
 ## For developers
 

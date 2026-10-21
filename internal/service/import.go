@@ -88,6 +88,12 @@ func (s *Service) HumanImportTasks(ctx context.Context, projectID string, doc Im
 	// Validate the entire file before opening the write transaction.
 	for i := range doc.Tasks {
 		task := &doc.Tasks[i]
+		if _, err := s.ImageReferencesInTexts(ctx, projectID, task.Description, task.AITestInstructions, task.HumanTestInstructions); err != nil {
+			return 0, fmt.Errorf("%w: task %d has invalid image references", err, i+1)
+		}
+		if _, err := s.FileReferences(ctx, projectID, task.Description, task.AITestInstructions, task.HumanTestInstructions); err != nil {
+			return 0, fmt.Errorf("%w: task %d has invalid file references", err, i+1)
+		}
 		if strings.TrimSpace(task.Title) == "" {
 			return 0, fmt.Errorf("%w: task %d has no title", core.ErrInvalidInput, i+1)
 		}

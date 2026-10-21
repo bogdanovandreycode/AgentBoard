@@ -49,6 +49,7 @@ import { SelectField } from "./SelectField";
 import { PropertyField } from "./PropertyField";
 import { propertyDisplay, type PropertyDef } from "./propertyUtils";
 import { MarkdownField, MarkdownView } from "./MarkdownField";
+import { imageReferenceSummary } from "./imageReferences";
 import { capabilityPresets, relativeTime } from "./workerPresentation";
 import { SettingsPage } from "./SettingsPage";
 import { ProjectsPage } from "./ProjectsPage";
@@ -705,7 +706,7 @@ function TaskCard({
         }}>
       <div className="task-key">{short(task.ID)}</div>
       <h3>{task.Title}</h3>
-      {task.Description && <p>{task.Description}</p>}
+      {task.Description && <p>{imageReferenceSummary(task.Description)}</p>}
       {!!task.Properties?.length && <div className="card-properties">{task.Properties.slice(0, 2).map((property) =>
         <span key={property.PropertyDefinitionID}><b>{property.Name}:</b> {propertyDisplay(property, property.Value)}</span>
       )}</div>}
@@ -757,6 +758,7 @@ function TaskForm({
 }) {
   const notify = useNotify();
   const [saved, setSaved] = useState(false);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const definitions = useQuery({
       queryKey: ["properties", projectID],
       queryFn: () => api<PropertyDef[]>(`/projects/${projectID}/properties`),
@@ -819,8 +821,10 @@ function TaskForm({
           />
         </label>
         <label className="wide">
-          Description
-          <MarkdownField value={form.Description} onChange={(value) => setForm({ ...form, Description: value })} />
+          {t("Description")}
+          <MarkdownField value={form.Description} onChange={(value) => setForm((current) => ({ ...current, Description: value }))}
+            projectID={projectID} disabled={save.isPending} onBusyChange={setUploadingAttachments}
+            onUploadError={(message) => notify("error", t("Attachment upload failed"), message)} />
         </label>
         <label>
           {t("State")}
@@ -931,7 +935,7 @@ function TaskForm({
         close={close}
         save={() => save.mutate()}
         busy={save.isPending}
-        disabled={!form.Title}
+        disabled={!form.Title || uploadingAttachments}
       />
     </Modal>
   );
@@ -951,6 +955,7 @@ function TaskDrawer({
   refresh: () => void;
 }) {
   const date = useDateFormat();
+  const notify = useNotify();
   const [editing, setEditing] = useState(false),
     [closed, setClosed] = useState(false),
     qc = useQueryClient(),
@@ -981,7 +986,8 @@ function TaskDrawer({
           method: "POST",
           body: JSON.stringify({ Content: content }),
         }),
-      onSuccess: reload,
+      onSuccess: () => { reload(); notify("success", translate("Comment added")); },
+      onError: (error) => notify("error", translate("Could not add comment"), error.message),
     });
   const visible = !closed && !!(q.data || q.error);
   if (!q.data)
@@ -1085,7 +1091,7 @@ function TaskDrawer({
             ))}
           </Panel>
         )}
-        <Tabs details={t} addComment={(v) => comment.mutate(v)} />
+        <Tabs details={t} addComment={(v) => comment.mutateAsync(v)} commentBusy={comment.isPending} />
         {editing && (
           <TaskEditForm
             task={t}
@@ -1109,6 +1115,7 @@ function TaskEditForm({
 }) {
   const notify = useNotify();
   const [saved, setSaved] = useState(false);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const definitions = useQuery({
       queryKey: ["properties", task.ProjectID],
       queryFn: () =>
@@ -1162,7 +1169,9 @@ function TaskEditForm({
         </label>
         <label className="wide">
           {t("Description")}
-          <MarkdownField value={form.Description} onChange={(value) => setForm({ ...form, Description: value })} />
+          <MarkdownField value={form.Description} onChange={(value) => setForm((current) => ({ ...current, Description: value }))}
+            projectID={task.ProjectID} disabled={save.isPending} onBusyChange={setUploadingAttachments}
+            onUploadError={(message) => notify("error", t("Attachment upload failed"), message)} />
         </label>
         <label>
           {t("Priority")}
@@ -1231,7 +1240,7 @@ function TaskEditForm({
         close={close}
         save={() => save.mutate()}
         busy={save.isPending}
-        disabled={!form.Title}
+        disabled={!form.Title || uploadingAttachments}
       />
     </Modal>
   );
@@ -1240,11 +1249,15 @@ function TaskEditForm({
 function Tabs({
   details,
   addComment,
+  commentBusy,
 }: {
   details: Details;
-  addComment: (v: string) => void;
+  addComment: (v: string) => Promise<unknown>;
+  commentBusy: boolean;
 }) {
   const date = useDateFormat();
+  const notify = useNotify();
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [tab, setTab] = useState("History"),
     [text, setText] = useState(""),
     tabs = ["History", "Testing", "Artifacts", "AI usage"];
@@ -1262,24 +1275,28 @@ function Tabs({
               shape="circle" className={`actor-${h.ActorType}`} />}
             content={(h: History) => <Card className="activity-card">
               <div className="activity-heading"><b>{h.ActorName}</b><time>{date(h.CreatedAt)}</time></div>
-              <p>{h.Content}</p><Tag value={h.EntryType.replaceAll("_", " ")} severity="secondary" />
+              {h.EntryType === "human_comment" || h.EntryType === "agent_comment" ? <MarkdownView value={h.Content} /> : <p>{h.Content}</p>}<Tag value={h.EntryType.replaceAll("_", " ")} severity="secondary" />
             </Card>} /> : <Message severity="info" text={t("No history yet")} />}
           <form
-            className="comment"
-            onSubmit={(e) => {
+            className="comment markdown-comment"
+            onSubmit={async (e) => {
               e.preventDefault();
-              if (text.trim()) {
-                addComment(text);
-                setText("");
+              if (text.trim() && !commentBusy && !uploadingAttachments) {
+                try { await addComment(text); setText(""); } catch { /* The mutation displays the error; retain the draft. */ }
               }
             }}
           >
-            <InputText
+            <MarkdownField
               placeholder={t("Add a Human comment…")}
               value={text}
-              onChange={(e) => setText(e.target.value)}
+              onChange={setText}
+              rows={3}
+              projectID={details.ProjectID}
+              disabled={commentBusy}
+              onBusyChange={setUploadingAttachments}
+              onUploadError={(message) => notify("error", t("Attachment upload failed"), message)}
             />
-            <Button>{t("Send")}</Button>
+            <Button type="submit" loading={commentBusy} disabled={commentBusy || uploadingAttachments || !text.trim()}>{t("Send")}</Button>
           </form>
         </>
       )}

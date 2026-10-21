@@ -108,6 +108,17 @@ func (s *Service) CreateFeature(ctx context.Context, a core.AgentContext, in cor
 	if strings.TrimSpace(in.Title) == "" {
 		return core.Task{}, core.ErrInvalidInput
 	}
+	if err := s.AgentValidateImageReferences(ctx, a, "", in.Description); err != nil {
+		return core.Task{}, err
+	}
+	if err := s.AgentValidateImageReferences(ctx, a, "", in.Reason); err != nil {
+		return core.Task{}, err
+	}
+	for _, text := range []string{in.Description, in.Reason} {
+		if err := s.AgentValidateFileReferences(ctx, a, "", text); err != nil {
+			return core.Task{}, err
+		}
+	}
 	if in.Priority == "" {
 		in.Priority = "medium"
 	}
@@ -229,7 +240,15 @@ func (s *Service) AgentAddHistory(ctx context.Context, a core.AgentContext, task
 	if strings.TrimSpace(content) == "" {
 		return core.HistoryEntry{}, core.ErrInvalidInput
 	}
+	if err := s.AgentValidateImageReferences(ctx, a, taskID, content); err != nil {
+		return core.HistoryEntry{}, err
+	}
+	if err := s.AgentValidateFileReferences(ctx, a, taskID, content); err != nil {
+		return core.HistoryEntry{}, err
+	}
 	h := core.HistoryEntry{ID: id(), TaskID: taskID, ActorType: "agent", EntryType: "agent_comment", Content: content, CreatedAt: core.Now(), WorkerID: &a.Worker.ID, WorkerSessionID: &a.Session.ID, ActorName: a.Worker.Name}
+	h.Images, _ = s.ImageReferences(ctx, a.Project.ID, content)
+	h.Files, _ = s.FileReferences(ctx, a.Project.ID, content)
 	_, err := s.Store.DB.ExecContext(ctx, `INSERT INTO history_entries(id,task_id,actor_type,worker_id,worker_session_id,entry_type,content,created_at) VALUES(?,?,?,?,?,?,?,?)`, h.ID, h.TaskID, h.ActorType, h.WorkerID, h.WorkerSessionID, h.EntryType, h.Content, h.CreatedAt)
 	return h, err
 }
@@ -384,6 +403,12 @@ func (s *Service) HumanBoard(ctx context.Context, projectID string) (core.Board,
 }
 
 func (s *Service) HumanCreateTask(ctx context.Context, projectID string, in core.TaskInput) (core.Task, error) {
+	if _, err := s.ImageReferencesInTexts(ctx, projectID, in.Description, in.AITestInstructions, in.HumanTestInstructions); err != nil {
+		return core.Task{}, err
+	}
+	if _, err := s.FileReferences(ctx, projectID, in.Description, in.AITestInstructions, in.HumanTestInstructions); err != nil {
+		return core.Task{}, err
+	}
 	if err := s.validatePropertyValues(ctx, projectID, in.Properties, false); err != nil {
 		return core.Task{}, err
 	}
@@ -417,6 +442,14 @@ func (s *Service) HumanTask(ctx context.Context, taskID string) (core.TaskDetail
 	t.Dependencies, _ = s.ListDependencies(ctx, taskID)
 	t.Artifacts, _ = s.ListArtifacts(ctx, taskID)
 	t.Properties, _ = s.ListTaskProperties(ctx, taskID, false)
+	t.Images, err = s.ImageReferencesInTexts(ctx, t.ProjectID, t.Description, t.AITestInstructions, t.HumanTestInstructions)
+	if err != nil {
+		return core.TaskDetails{}, err
+	}
+	t.Files, err = s.FileReferences(ctx, t.ProjectID, t.Description, t.AITestInstructions, t.HumanTestInstructions)
+	if err != nil {
+		return core.TaskDetails{}, err
+	}
 	d := core.TaskDetails{Task: t}
 	d.History, _ = s.ListHistory(ctx, taskID)
 	d.TestRuns, _ = s.ListTests(ctx, taskID)
@@ -439,6 +472,12 @@ func (s *Service) HumanUpdateTask(ctx context.Context, taskID string, in core.Ta
 		t.Title = *in.Title
 	}
 	if in.Description != nil {
+		if _, err := s.FileReferences(ctx, t.ProjectID, *in.Description); err != nil {
+			return t, err
+		}
+		if _, err := s.ImageReferences(ctx, t.ProjectID, *in.Description); err != nil {
+			return t, err
+		}
 		t.Description = *in.Description
 	}
 	if in.Priority != nil {
@@ -448,9 +487,21 @@ func (s *Service) HumanUpdateTask(ctx context.Context, taskID string, in core.Ta
 		t.TestingMode = *in.TestingMode
 	}
 	if in.AITestInstructions != nil {
+		if _, err := s.FileReferences(ctx, t.ProjectID, *in.AITestInstructions); err != nil {
+			return t, err
+		}
+		if _, err := s.ImageReferences(ctx, t.ProjectID, *in.AITestInstructions); err != nil {
+			return t, err
+		}
 		t.AITestInstructions = *in.AITestInstructions
 	}
 	if in.HumanTestInstructions != nil {
+		if _, err := s.FileReferences(ctx, t.ProjectID, *in.HumanTestInstructions); err != nil {
+			return t, err
+		}
+		if _, err := s.ImageReferences(ctx, t.ProjectID, *in.HumanTestInstructions); err != nil {
+			return t, err
+		}
 		t.HumanTestInstructions = *in.HumanTestInstructions
 	}
 	if in.Position != nil {
@@ -510,11 +561,25 @@ func (s *Service) HumanDeleteTask(ctx context.Context, taskID string) error {
 }
 
 func (s *Service) HumanComment(ctx context.Context, taskID, content string) (core.HistoryEntry, error) {
-	if _, err := s.Store.GetTask(ctx, taskID); err != nil {
+	task, err := s.Store.GetTask(ctx, taskID)
+	if err != nil {
+		return core.HistoryEntry{}, err
+	}
+	if strings.TrimSpace(content) == "" {
+		return core.HistoryEntry{}, core.ErrInvalidInput
+	}
+	images, err := s.ImageReferences(ctx, task.ProjectID, content)
+	if err != nil {
+		return core.HistoryEntry{}, err
+	}
+	files, err := s.FileReferences(ctx, task.ProjectID, content)
+	if err != nil {
 		return core.HistoryEntry{}, err
 	}
 	h := core.HistoryEntry{ID: id(), TaskID: taskID, ActorType: "human", EntryType: "human_comment", Content: content, CreatedAt: core.Now(), ActorName: "Human"}
-	_, err := s.Store.DB.ExecContext(ctx, `INSERT INTO history_entries(id,task_id,actor_type,entry_type,content,created_at) VALUES(?,?,?,?,?,?)`, h.ID, taskID, h.ActorType, h.EntryType, h.Content, h.CreatedAt)
+	h.Images = images
+	h.Files = files
+	_, err = s.Store.DB.ExecContext(ctx, `INSERT INTO history_entries(id,task_id,actor_type,entry_type,content,created_at) VALUES(?,?,?,?,?,?)`, h.ID, taskID, h.ActorType, h.EntryType, h.Content, h.CreatedAt)
 	return h, err
 }
 
@@ -535,7 +600,33 @@ func (s *Service) ListHistory(ctx context.Context, taskID string) ([]core.Histor
 		}
 		out = append(out, h)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	// Release the sole SQLite connection before loading image metadata.
+	if len(out) > 0 {
+		task, err := s.Store.GetTask(ctx, taskID)
+		if err != nil {
+			return nil, err
+		}
+		for i := range out {
+			if out[i].EntryType != "human_comment" && out[i].EntryType != "agent_comment" {
+				continue
+			}
+			out[i].Images, err = s.ImageReferences(ctx, task.ProjectID, out[i].Content)
+			if err != nil {
+				return nil, err
+			}
+			out[i].Files, err = s.FileReferences(ctx, task.ProjectID, out[i].Content)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return out, nil
 }
 
 func (s *Service) loadAgentContext(ctx context.Context, t *core.Task) error {
@@ -549,6 +640,14 @@ func (s *Service) loadAgentContext(ctx context.Context, t *core.Task) error {
 		return err
 	}
 	t.Properties, err = s.ListTaskProperties(ctx, t.ID, true)
+	if err != nil {
+		return err
+	}
+	t.Images, err = s.ImageReferencesInTexts(ctx, t.ProjectID, t.Description, t.AITestInstructions, t.HumanTestInstructions)
+	if err != nil {
+		return err
+	}
+	t.Files, err = s.FileReferences(ctx, t.ProjectID, t.Description, t.AITestInstructions, t.HumanTestInstructions)
 	return err
 }
 

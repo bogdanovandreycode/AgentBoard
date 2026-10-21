@@ -30,7 +30,16 @@ var boardSettingsMigration string
 //go:embed migrations/005_property_fields.sql
 var propertyFieldsMigration string
 
-type Store struct{ DB *sql.DB }
+//go:embed migrations/006_images.sql
+var imagesMigration string
+
+//go:embed migrations/007_files.sql
+var filesMigration string
+
+type Store struct {
+	DB       *sql.DB
+	imageDir string
+}
 
 func DefaultDBPath() string {
 	base, err := os.UserConfigDir()
@@ -146,7 +155,64 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	return &Store{DB: db}, nil
+	tx, err = db.Begin()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err = tx.Exec("UPDATE schema_migrations SET version=version WHERE version=1"); err == nil {
+		var count int
+		err = tx.QueryRow("SELECT count(*) FROM schema_migrations WHERE version=6").Scan(&count)
+		if err == nil && count == 0 {
+			_, err = tx.Exec(imagesMigration)
+			if err == nil {
+				_, err = tx.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(6,?)", core.Now())
+			}
+		}
+	}
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		return nil, fmt.Errorf("migrate v6: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	tx, err = db.Begin()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err = tx.Exec("UPDATE schema_migrations SET version=version WHERE version=1"); err == nil {
+		var count int
+		err = tx.QueryRow("SELECT count(*) FROM schema_migrations WHERE version=7").Scan(&count)
+		if err == nil && count == 0 {
+			_, err = tx.Exec(filesMigration)
+			if err == nil {
+				_, err = tx.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(7,?)", core.Now())
+			}
+		}
+	}
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		return nil, fmt.Errorf("migrate v7: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	var databasePath string
+	if err = db.QueryRow("SELECT file FROM pragma_database_list WHERE name='main'").Scan(&databasePath); err != nil {
+		db.Close()
+		return nil, err
+	}
+	imageDir := ""
+	if databasePath != "" {
+		imageDir = filepath.Join(filepath.Dir(databasePath), "images")
+	}
+	return &Store{DB: db, imageDir: imageDir}, nil
 }
 
 func (s *Store) Close() error { return s.DB.Close() }

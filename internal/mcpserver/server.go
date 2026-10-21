@@ -22,7 +22,18 @@ otherwise select an assigned feature. Use AgentBoard tools for task state, histo
 testing and usage. Only move forward using the explicit workflow tools and respect
 human testing requirements. Never read or modify AgentBoard SQLite storage directly.
 AgentBoard MCP is the only supported worker interface. These capabilities enforce
-workflow permissions; OS-level isolation requires a sandbox.`
+workflow permissions; OS-level isolation requires a sandbox.
+get_task includes images referenced in the task description, testing instructions
+and comments as native image content. Read screenshots with their Markdown links.
+If an image is omitted from get_task, call get_image with its task_id and image_id.
+To share your screenshot, call upload_image with the assigned task_id and a local
+image path or base64 data, then include its returned Markdown link in add_history.
+Images are stored as compressed WebP files by AgentBoard; never use local file
+paths or base64 data as comment attachments.
+For other attachments use upload_file, then include its returned Markdown link in
+add_history. get_task lists file metadata in Files and History[].Files. Use get_file
+with task_id and file_id to read a file in bounded UTF-8 or base64 chunks; advance
+offset to next_offset until eof. Files are stored unchanged, separately from images.`
 
 func New(s *service.Service, a core.AgentContext, version string) *Server {
 	x := &Server{Service: s, Agent: a}
@@ -126,14 +137,16 @@ func (s *Server) register() {
 		}
 		return output(v)
 	})
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "get_task", Description: "Get details for a task assigned to the current Worker."}, func(ctx context.Context, _ *mcp.CallToolRequest, in taskIDInput) (*mcp.CallToolResult, any, error) {
+	mcp.AddTool(s.MCP, &mcp.Tool{Name: "get_task", Description: "Get assigned task details and view screenshots from its description, testing instructions and comments. Images are returned as native image content; use get_image for any omitted images."}, func(ctx context.Context, _ *mcp.CallToolRequest, in taskIDInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		v, e := s.Service.AgentTask(ctx, s.Agent, in.TaskID)
 		if e != nil {
 			return failure(e)
 		}
-		return output(v)
+		return s.taskOutput(ctx, v)
 	})
+	s.registerImages()
+	s.registerFiles()
 	mcp.AddTool(s.MCP, &mcp.Tool{Name: "list_workers", Description: "List enabled Workers available when assigning a newly-created Feature."}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		v, e := s.Service.Store.ListWorkers(ctx, s.Agent.Project.ID, true)
@@ -150,7 +163,7 @@ func (s *Server) register() {
 		}
 		return output(v)
 	})
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "add_history", Description: "Add an agent comment to an assigned task."}, func(ctx context.Context, _ *mcp.CallToolRequest, in historyInput) (*mcp.CallToolResult, any, error) {
+	mcp.AddTool(s.MCP, &mcp.Tool{Name: "add_history", Description: "Add an agent comment to an assigned task. To attach screenshots, first call upload_image and insert its returned Markdown link in content."}, func(ctx context.Context, _ *mcp.CallToolRequest, in historyInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		v, e := s.Service.AgentAddHistory(ctx, s.Agent, in.TaskID, in.Content)
 		if e != nil {

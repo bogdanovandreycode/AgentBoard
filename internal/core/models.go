@@ -48,6 +48,8 @@ type Task struct {
 	Dependencies                                                     []Dependency
 	Artifacts                                                        []Artifact
 	Properties                                                       []TaskPropertyValue
+	Images                                                           []Image
+	Files                                                            []FileAttachment
 }
 
 type Dependency struct {
@@ -61,10 +63,26 @@ type Artifact struct {
 	CreatorName                                                   string
 }
 
+// Image stores metadata and references only; image content is kept in the images directory.
+type Image struct {
+	ID, ProjectID, Name, URL, Path, CreatedAt string
+	UploadedTaskID                            string
+	Width, Height                             int
+}
+
+// FileAttachment keeps the original file on disk; SQLite stores only metadata.
+type FileAttachment struct {
+	ID, ProjectID, Name, URL, Path, MIMEType, CreatedAt string
+	UploadedTaskID                                      string
+	Size                                                int64
+}
+
 type HistoryEntry struct {
 	ID, TaskID, ActorType, EntryType, Content, CreatedAt string
 	WorkerID, WorkerSessionID                            *string
 	ActorName                                            string
+	Images                                               []Image
+	Files                                                []FileAttachment
 }
 
 type TestRun struct {

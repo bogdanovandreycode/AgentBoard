@@ -38,6 +38,18 @@ const rows: Record<string, string> = {
 };
 
 const russianExtra: Record<string, string> = {
+  "Images": "Картинки", "Files": "Файлы", "File": "Файл",
+  "Attach files": "Прикрепить файлы", "Attached files": "Прикреплённые файлы",
+  "Remove file reference": "Убрать файл", "Could not open file folder": "Не удалось открыть папку файла",
+  "Attachment upload failed": "Не удалось загрузить вложение", "Uploading attachments…": "Загрузка вложений…",
+  "Drop files here or paste a screenshot": "Перетащите файлы сюда или вставьте скриншот из буфера обмена",
+  "Attach images": "Прикрепить картинки", "Attached images": "Прикреплённые картинки",
+  "Remove image reference": "Убрать ссылку на картинку", "Image": "Картинка", "Screenshot": "Скриншот",
+  "Download": "Скачать", "Show in folder": "Показать в проводнике",
+  "Could not open image folder": "Не удалось открыть папку с картинкой", "Image could not be loaded": "Не удалось загрузить картинку",
+  "Uploading images…": "Загрузка картинок…", "Image upload failed": "Не удалось загрузить картинку",
+  "Drop images here or paste a screenshot": "Перетащите картинки сюда или вставьте скриншот из буфера обмена",
+  "Comment added": "Комментарий добавлен", "Could not add comment": "Не удалось добавить комментарий",
   "General": "Основные", "Columns": "Колонки",
   "Choose a project to open its board and workers.": "Выберите проект, чтобы открыть его доску и воркеров.",
   "No projects connected yet": "Ещё не подключены проекты",
