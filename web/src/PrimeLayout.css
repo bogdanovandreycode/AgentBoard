@@ -35,7 +35,7 @@ body { min-width: 320px; }
 .column-title { padding: 7px 5px 15px; }
 .column-title h2 { font-size: 11px; }
 .column-title .p-tag { margin-left: auto; font-size: 10px; }
-.card-list { gap: 10px; }
+.card-list { gap: 10px; grid-template-columns: minmax(0, 1fr); }
 .task-card { border-color: #344057; background: #1d2637; border-radius: 12px; padding: 14px; box-shadow: 0 6px 22px #050a1633; }
 .task-card:hover { border-color: #8178d7; background: #232d42; }
 .task-card h3 { font-size: 13px; line-height: 1.45; }
@@ -104,7 +104,10 @@ body { min-width: 320px; }
 .empty-column.p-card { display: grid; place-items: center; width: 100%; min-height: 84px; border: 1px dashed #46516a; background: transparent; margin: 0; box-shadow: none; }
 .empty-column .p-card-body { padding: 0; }
 .empty-column .p-card-content { padding: 0; font-weight: 500; }
-.task-card { padding: 0; background: transparent; border: 0; box-shadow: none; }
+.task-card { min-width: 0; max-width: 100%; padding: 0; background: transparent; border: 0; box-shadow: none; }
+.task-surface { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.task-surface .card-footer { flex-wrap: wrap; }
+.task-surface .assignee, .task-surface .origin { min-width: 0; overflow-wrap: anywhere; }
 .task-card:hover { background: transparent; }
 .task-card .task-surface.p-card { border: 1px solid #344057; background: #1d2637; border-radius: 12px; box-shadow: 0 6px 22px #050a1633; }
 .task-card:hover .task-surface.p-card { border-color: #8178d7; background: #232d42; }

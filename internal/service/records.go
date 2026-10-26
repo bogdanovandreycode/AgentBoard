@@ -15,10 +15,11 @@ import (
 )
 
 func (s *Service) AgentAddArtifact(ctx context.Context, a core.AgentContext, taskID string, in core.ArtifactInput) (core.Artifact, error) {
-	if _, err := s.accessibleTask(ctx, a, taskID); err != nil {
+	task, err := s.accessibleTask(ctx, a, taskID)
+	if err != nil {
 		return core.Artifact{}, err
 	}
-	return s.addArtifact(ctx, taskID, in, "agent", &a.Worker.ID, &a.Session.ID)
+	return s.addArtifact(ctx, task.ID, in, "agent", &a.Worker.ID, &a.Session.ID)
 }
 func (s *Service) HumanAddArtifact(ctx context.Context, taskID string, in core.ArtifactInput) (core.Artifact, error) {
 	if _, err := s.Store.GetTask(ctx, taskID); err != nil {
@@ -71,10 +72,11 @@ func (s *Service) ListArtifacts(ctx context.Context, taskID string) ([]core.Arti
 }
 
 func (s *Service) AgentRecordTest(ctx context.Context, a core.AgentContext, taskID string, in core.TestRunInput) (core.TestRun, error) {
-	if _, err := s.accessibleTask(ctx, a, taskID); err != nil {
+	task, err := s.accessibleTask(ctx, a, taskID)
+	if err != nil {
 		return core.TestRun{}, err
 	}
-	return s.recordTest(ctx, taskID, in, &a.Worker.ID, &a.Session.ID)
+	return s.recordTest(ctx, task.ID, in, &a.Worker.ID, &a.Session.ID)
 }
 func (s *Service) HumanRecordTest(ctx context.Context, taskID string, in core.TestRunInput) (core.TestRun, error) {
 	if _, err := s.Store.GetTask(ctx, taskID); err != nil {
@@ -128,11 +130,13 @@ func (s *Service) ListTests(ctx context.Context, taskID string) ([]core.TestRun,
 }
 
 func (s *Service) AgentReportUsage(ctx context.Context, a core.AgentContext, taskID string, in core.UsageInput) (core.UsageEvent, error) {
-	if _, err := s.accessibleTask(ctx, a, taskID); err != nil {
+	task, err := s.accessibleTask(ctx, a, taskID)
+	if err != nil {
 		return core.UsageEvent{}, err
 	}
+	taskID = task.ID
 	u := core.UsageEvent{ID: id(), ProjectID: a.Project.ID, TaskID: taskID, WorkerID: a.Worker.ID, WorkerSessionID: a.Session.ID, Provider: in.Provider, Model: in.Model, InputTokens: in.InputTokens, OutputTokens: in.OutputTokens, ReasoningTokens: in.ReasoningTokens, CachedTokens: in.CachedTokens, ReasoningEffort: in.ReasoningEffort, ModelCalls: in.ModelCalls, ToolCalls: in.ToolCalls, WallTimeMS: in.WallTimeMS, Source: in.Source, CreatedAt: core.Now(), WorkerName: a.Worker.Name}
-	_, err := s.Store.DB.ExecContext(ctx, `INSERT INTO usage_events(id,project_id,task_id,worker_id,worker_session_id,provider,model,input_tokens,output_tokens,reasoning_tokens,cached_tokens,reasoning_effort,model_calls,tool_calls,mcp_calls,wall_time_ms,source,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, u.ID, u.ProjectID, u.TaskID, u.WorkerID, u.WorkerSessionID, u.Provider, u.Model, u.InputTokens, u.OutputTokens, u.ReasoningTokens, u.CachedTokens, u.ReasoningEffort, u.ModelCalls, u.ToolCalls, u.MCPCalls, u.WallTimeMS, u.Source, u.CreatedAt)
+	_, err = s.Store.DB.ExecContext(ctx, `INSERT INTO usage_events(id,project_id,task_id,worker_id,worker_session_id,provider,model,input_tokens,output_tokens,reasoning_tokens,cached_tokens,reasoning_effort,model_calls,tool_calls,mcp_calls,wall_time_ms,source,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, u.ID, u.ProjectID, u.TaskID, u.WorkerID, u.WorkerSessionID, u.Provider, u.Model, u.InputTokens, u.OutputTokens, u.ReasoningTokens, u.CachedTokens, u.ReasoningEffort, u.ModelCalls, u.ToolCalls, u.MCPCalls, u.WallTimeMS, u.Source, u.CreatedAt)
 	return u, err
 }
 func (s *Service) ListUsage(ctx context.Context, taskID string) ([]core.UsageEvent, error) {

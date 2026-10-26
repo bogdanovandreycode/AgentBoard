@@ -36,7 +36,7 @@ type fileChunk struct {
 }
 
 func (s *Server) registerFiles() {
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "upload_file", Description: "Upload any file for an assigned task from a local path or base64, up to 50 MiB. Preserves the original bytes. Insert the returned document Markdown link in add_history to attach it. For screenshots use upload_image."}, func(ctx context.Context, _ *mcp.CallToolRequest, in uploadFileInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "upload_file", Description: "Upload any file for an assigned task from a local path or base64, up to 50 MiB. Preserves the original bytes. Insert the returned document Markdown link in add_history to attach it. For screenshots use upload_image."}, func(ctx context.Context, _ *mcp.CallToolRequest, in uploadFileInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		if _, err := s.Service.AgentTask(ctx, s.Agent, in.TaskID); err != nil {
 			return failure(err)
@@ -55,7 +55,7 @@ func (s *Server) registerFiles() {
 			Markdown string              `json:"markdown"`
 		}{File: file, Markdown: fmt.Sprintf("[📄 %s](%s)", name, file.URL)})
 	})
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "get_file", Description: "Read a file attached to an assigned task's description, instructions or comment. Returns a bounded chunk encoded as utf-8 or base64 with next_offset and eof. Read following chunks using next_offset. Access follows task permissions."}, func(ctx context.Context, _ *mcp.CallToolRequest, in getFileInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "get_file", Description: "Read a file attached to an assigned task's description, instructions or comment. Returns a bounded chunk encoded as utf-8 or base64 with next_offset and eof. Read following chunks using next_offset. Access follows task permissions."}, func(ctx context.Context, _ *mcp.CallToolRequest, in getFileInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		if in.Offset < 0 || in.Length < 0 || in.Length > 1<<20 {
 			return failure(core.ErrInvalidInput)

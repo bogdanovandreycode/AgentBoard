@@ -32,7 +32,7 @@ type imageIDInput struct {
 }
 
 func (s *Server) registerImages() {
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "upload_image", Description: "Upload a screenshot for an assigned task from a local path or base64 (maximum 20 MiB). Converts it to WebP and returns a Markdown link. Insert that link in add_history to attach the screenshot to your comment."}, func(ctx context.Context, _ *mcp.CallToolRequest, in uploadImageInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "upload_image", Description: "Upload a screenshot for an assigned task from a local path or base64 (maximum 20 MiB). Converts it to WebP and returns a Markdown link. Insert that link in add_history to attach the screenshot to your comment."}, func(ctx context.Context, _ *mcp.CallToolRequest, in uploadImageInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		// Check task visibility before reading any local file or decoding its bytes.
 		if _, err := s.Service.AgentTask(ctx, s.Agent, in.TaskID); err != nil {
@@ -52,7 +52,7 @@ func (s *Server) registerImages() {
 			Instructions string     `json:"instructions"`
 		}{Image: img, Markdown: imageMarkdown(img), Instructions: "Include this Markdown link in add_history content to attach the screenshot. Refer to screenshots by name or number when explaining changes."})
 	})
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "get_image", Description: "View an image referenced in an assigned task description, testing instructions or comment. Returns native WebP image content. Use this for screenshots omitted from get_task."}, func(ctx context.Context, _ *mcp.CallToolRequest, in imageIDInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "get_image", Description: "View an image referenced in an assigned task description, testing instructions or comment. Returns native WebP image content. Use this for screenshots omitted from get_task."}, func(ctx context.Context, _ *mcp.CallToolRequest, in imageIDInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		img, data, err := s.Service.AgentImage(ctx, s.Agent, in.TaskID, in.ImageID)
 		if err != nil {
@@ -113,7 +113,10 @@ func imageMarkdown(img core.Image) string {
 }
 
 func (s *Server) taskOutput(ctx context.Context, task core.TaskDetails) (*mcp.CallToolResult, any, error) {
-	result, _, _ := output(task)
+	result, _, _ := output(struct {
+		core.TaskDetails
+		Workflow service.AgentWorkflow
+	}{task, s.Service.AgentWorkflow(ctx, s.Agent, task.Task)})
 	type referencedImage struct {
 		image  core.Image
 		source string

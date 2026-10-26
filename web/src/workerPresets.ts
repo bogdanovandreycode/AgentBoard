@@ -17,8 +17,9 @@ export function presetCapabilities(harness: string) {
   return JSON.stringify(capabilityPresets[capability], null, 2);
 }
 
-export function mcpConfiguration(harness: string, projectPath: string, slug: string, executable = "agentboard") {
+export function mcpConfiguration(harness: string, projectPath: string, slug: string, executable = "agentboard", databasePath?: string) {
   const args = ["mcp", "--project", projectPath, "--worker", slug];
+  if (databasePath) args.push("--db", databasePath);
   const server = { command: executable, args };
   if (harness === "codex") return {
     location: "~/.codex/config.toml", text: `[mcp_servers.agentboard_${slug.replace(/[^a-zA-Z0-9_-]/g, "_")}]\ncommand = ${JSON.stringify(executable)}\nargs = [${args.map((arg) => JSON.stringify(arg)).join(", ")}]\n`,

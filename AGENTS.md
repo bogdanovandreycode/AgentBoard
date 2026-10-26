@@ -85,6 +85,9 @@ Tasks may use:
 AI must respect the configured testing policy.
 
 A task requiring unresolved human testing must not be moved by AI to verification.
+After moving completed implementation to testing, provide handoff instructions
+and finish the session or continue another task. Never wait, poll, or repeatedly
+retry verification while human testing is pending.
 
 ## History
 

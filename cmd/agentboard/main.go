@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -153,16 +152,17 @@ func serveCommand(args []string, open bool) error {
 
 func mcpCommand(args []string) error {
 	f := flag.NewFlagSet("mcp", flag.ContinueOnError)
-	project := f.String("project", "", "managed project path")
+	project := f.String("project", "", "managed project directory (defaults to the nearest registered project containing the current directory)")
 	worker := f.String("worker", "", "worker id or slug")
 	db := f.String("db", "", "database path")
+	allowMismatch := f.Bool("allow-project-mismatch", false, "explicitly confirm using --project when the launch directory or client workspace belongs to another project")
 	if err := f.Parse(args); err != nil {
 		return err
 	}
-	if *project == "" || *worker == "" {
-		return errors.New("mcp requires --project and --worker")
+	if *worker == "" || f.NArg() != 0 {
+		return errors.New("usage: agentboard mcp --worker WORKER [--project PATH] [--db PATH] [--allow-project-mismatch]")
 	}
-	abs, err := filepath.Abs(*project)
+	cwd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
@@ -174,12 +174,17 @@ func mcpCommand(args []string) error {
 	svc := service.New(st)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	agent, err := svc.BeginAgentSession(ctx, abs, *worker, "stdio MCP")
+	p, workspace, err := resolveMCPProject(ctx, svc, cwd, *project, *allowMismatch)
+	if err != nil {
+		return err
+	}
+	agent, err := svc.BeginAgentSession(ctx, p.Path, *worker, "stdio MCP")
 	if err != nil {
 		return err
 	}
 	defer svc.EndAgentSession(context.Background(), agent)
 	server := mcpserver.New(svc, agent, version)
+	server.Workspace = workspace
 	return server.Run(ctx, &mcp.StdioTransport{})
 }
 

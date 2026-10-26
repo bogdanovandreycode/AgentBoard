@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/bogdanovandreycode/agentboard/internal/core"
@@ -11,9 +12,11 @@ import (
 )
 
 type Server struct {
-	MCP     *mcp.Server
-	Service *service.Service
-	Agent   core.AgentContext
+	MCP       *mcp.Server
+	Service   *service.Service
+	Agent     core.AgentContext
+	Workspace *WorkspaceContext
+	guard     workspaceGuard
 }
 
 const instructions = `AgentBoard is the task source of truth for this worker.
@@ -21,6 +24,15 @@ At the start of a work session call get_my_board. Continue in_progress tasks fir
 otherwise select an assigned feature. Use AgentBoard tools for task state, history,
 testing and usage. Only move forward using the explicit workflow tools and respect
 human testing requirements. Never read or modify AgentBoard SQLite storage directly.
+For human/hybrid tasks, move completed implementation to testing, leave handoff
+instructions, then finish the session or continue another task. Never wait, poll,
+or repeatedly retry while human testing is pending. Do not bypass this gate.
+task_id accepts a full UUID or a unique case-insensitive prefix of at least 8
+characters among your visible assigned tasks. Source/dependency IDs require full UUIDs.
+get_my_board returns summaries; use get_task for full descriptions and history.
+Responses contain one JSON text payload, plus native image blocks when applicable.
+report_usage MCPCalls is a cumulative session snapshot including that call,
+not a per-task count. Do not sum these snapshots across tasks or usage events.
 AgentBoard MCP is the only supported worker interface. These capabilities enforce
 workflow permissions; OS-level isolation requires a sandbox.
 get_task includes images referenced in the task description, testing instructions
@@ -36,10 +48,12 @@ with task_id and file_id to read a file in bounded UTF-8 or base64 chunks; advan
 offset to next_offset until eof. Files are stored unchanged, separately from images.`
 
 func New(s *service.Service, a core.AgentContext, version string) *Server {
-	x := &Server{Service: s, Agent: a}
-	x.MCP = mcp.NewServer(&mcp.Implementation{Name: "agentboard", Version: version}, &mcp.ServerOptions{Instructions: instructions})
+	x := &Server{Service: s, Agent: a, guard: workspaceGuard{sessions: make(map[*mcp.ServerSession]*workspaceSession)}}
+	x.MCP = mcp.NewServer(&mcp.Implementation{Name: "agentboard", Version: version}, &mcp.ServerOptions{Instructions: instructions,
+		RootsListChangedHandler: func(_ context.Context, req *mcp.RootsListChangedRequest) { x.invalidateWorkspace(req.Session) },
+	})
 	x.MCP.AddResource(&mcp.Resource{URI: "agentboard://current-worker", Name: "Current AgentBoard worker", MIMEType: "application/json"}, func(ctx context.Context, _ *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
-		b, err := json.Marshal(map[string]string{"project": a.Project.Name, "project_id": a.Project.ID, "worker": a.Worker.Name, "worker_id": a.Worker.ID, "instructions": instructions})
+		b, err := json.Marshal(map[string]any{"project": a.Project.Name, "project_id": a.Project.ID, "project_path": a.Project.Path, "worker": a.Worker.Name, "worker_id": a.Worker.ID, "workspace": x.Workspace, "instructions": instructions})
 		if err != nil {
 			return nil, err
 		}
@@ -70,14 +84,17 @@ func (s *Server) count(ctx context.Context) {
 }
 func output(v any) (*mcp.CallToolResult, any, error) {
 	b, _ := json.Marshal(v)
-	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(b)}}, StructuredContent: v}, nil, nil
+	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(b)}}}, nil, nil
 }
 func failure(err error) (*mcp.CallToolResult, any, error) {
+	if errors.Is(err, core.ErrHumanTestPending) {
+		err = errors.New("HUMAN_TEST_PENDING: leave the task in testing, provide handoff instructions, and finish this session or continue another task. Do not wait, poll, or retry verification until human testing is resolved")
+	}
 	return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}}, nil, nil
 }
 
 type taskIDInput struct {
-	TaskID string `json:"task_id" jsonschema:"Task ID"`
+	TaskID string `json:"task_id" jsonschema:"Full UUID or a unique case-insensitive prefix of at least 8 characters from get_my_board"`
 }
 type historyInput struct {
 	TaskID  string `json:"task_id"`
@@ -86,7 +103,7 @@ type historyInput struct {
 type artifactInput struct {
 	TaskID      string `json:"task_id"`
 	Name        string `json:"name"`
-	Kind        string `json:"kind"`
+	Kind        string `json:"kind" jsonschema:"Free-form artifact category, for example file, screenshot, url, build, or report"`
 	Path        string `json:"path,omitempty"`
 	URL         string `json:"url,omitempty"`
 	Description string `json:"description,omitempty"`
@@ -106,7 +123,7 @@ type featureInput struct {
 type testInput struct {
 	TaskID        string `json:"task_id"`
 	Runner        string `json:"runner"`
-	Type          string `json:"type"`
+	Type          string `json:"type" jsonschema:"Free-form test category, for example automated, unit, integration, or manual. Agent results never satisfy human testing."`
 	Command       string `json:"command,omitempty"`
 	Status        string `json:"status"`
 	Summary       string `json:"summary"`
@@ -129,15 +146,22 @@ type usageInput struct {
 }
 
 func (s *Server) register() {
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "get_my_board", Description: "List only tasks assigned to the current Worker in AI-visible workflow states."}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "get_my_board", Description: "List compact summaries of assigned AI-visible tasks. Use get_task for full details. Verify agentboard://current-worker matches your intended project."}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		v, e := s.Service.AgentBoard(ctx, s.Agent)
 		if e != nil {
 			return failure(e)
 		}
-		return output(v)
+		board := make(map[string][]taskSummary, len(v))
+		for state, tasks := range v {
+			board[state] = make([]taskSummary, 0, len(tasks))
+			for _, task := range tasks {
+				board[state] = append(board[state], s.summary(ctx, task))
+			}
+		}
+		return output(board)
 	})
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "get_task", Description: "Get assigned task details and view screenshots from its description, testing instructions and comments. Images are returned as native image content; use get_image for any omitted images."}, func(ctx context.Context, _ *mcp.CallToolRequest, in taskIDInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "get_task", Description: "Get assigned task details and view screenshots from its description, testing instructions and comments. Images are returned as native image content; use get_image for any omitted images."}, func(ctx context.Context, _ *mcp.CallToolRequest, in taskIDInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		v, e := s.Service.AgentTask(ctx, s.Agent, in.TaskID)
 		if e != nil {
@@ -147,7 +171,7 @@ func (s *Server) register() {
 	})
 	s.registerImages()
 	s.registerFiles()
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "list_workers", Description: "List enabled Workers available when assigning a newly-created Feature."}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "list_workers", Description: "List enabled Workers available when assigning a newly-created Feature."}, func(ctx context.Context, _ *mcp.CallToolRequest, _ any) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		v, e := s.Service.Store.ListWorkers(ctx, s.Agent.Project.ID, true)
 		if e != nil {
@@ -155,15 +179,15 @@ func (s *Server) register() {
 		}
 		return output(v)
 	})
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "create_feature", Description: "Create a Feature attributed to the current Worker and optionally assign it."}, func(ctx context.Context, _ *mcp.CallToolRequest, in featureInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "create_feature", InputSchema: enumSchema[featureInput](map[string][]any{"assignee_type": {"unassigned", "human", "worker"}, "priority": {"critical", "high", "medium", "low"}, "testing_mode": {"ai", "human", "hybrid"}}), Description: "Create a Feature attributed to the current Worker and optionally assign it. source_task_id and depends_on require full UUIDs."}, func(ctx context.Context, _ *mcp.CallToolRequest, in featureInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		v, e := s.Service.CreateFeature(ctx, s.Agent, core.FeatureInput{Title: in.Title, Description: in.Description, Reason: in.Reason, Assignee: core.Assignee{Type: in.AssigneeType, WorkerID: in.AssigneeWorkerID}, Priority: in.Priority, TestingMode: in.TestingMode, SourceTaskID: in.SourceTaskID, DependsOn: in.DependsOn, SuggestedProperties: in.SuggestedProperties})
 		if e != nil {
 			return failure(e)
 		}
-		return output(v)
+		return output(s.summary(ctx, v))
 	})
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "add_history", Description: "Add an agent comment to an assigned task. To attach screenshots, first call upload_image and insert its returned Markdown link in content."}, func(ctx context.Context, _ *mcp.CallToolRequest, in historyInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "add_history", Description: "Add an agent comment to an assigned task. To attach screenshots, first call upload_image and insert its returned Markdown link in content."}, func(ctx context.Context, _ *mcp.CallToolRequest, in historyInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		v, e := s.Service.AgentAddHistory(ctx, s.Agent, in.TaskID, in.Content)
 		if e != nil {
@@ -171,7 +195,7 @@ func (s *Server) register() {
 		}
 		return output(v)
 	})
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "add_artifact", Description: "Register a path or URL deliverable for an assigned task."}, func(ctx context.Context, _ *mcp.CallToolRequest, in artifactInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "add_artifact", Description: "Register a path or URL deliverable for an assigned task."}, func(ctx context.Context, _ *mcp.CallToolRequest, in artifactInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		v, e := s.Service.AgentAddArtifact(ctx, s.Agent, in.TaskID, core.ArtifactInput{Name: in.Name, Kind: in.Kind, Path: in.Path, URL: in.URL, Description: in.Description})
 		if e != nil {
@@ -182,7 +206,7 @@ func (s *Server) register() {
 	s.addMove("move_to_in_progress", "in_progress")
 	s.addMove("move_to_testing", "testing")
 	s.addMove("move_to_verification", "verification")
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "record_test_run", Description: "Record a structured automated test result for an assigned task."}, func(ctx context.Context, _ *mcp.CallToolRequest, in testInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "record_test_run", InputSchema: enumSchema[testInput](map[string][]any{"status": {"passed", "failed", "skipped", "manual_required"}}), Description: "Record an agent test result. status: passed, failed, skipped, manual_required. runner and type are free-form labels. Agent results never count as human testing."}, func(ctx context.Context, _ *mcp.CallToolRequest, in testInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		v, e := s.Service.AgentRecordTest(ctx, s.Agent, in.TaskID, core.TestRunInput{Runner: in.Runner, Type: in.Type, Command: in.Command, Status: in.Status, Summary: in.Summary, OutputExcerpt: in.OutputExcerpt, DurationMS: in.DurationMS})
 		if e != nil {
@@ -190,7 +214,7 @@ func (s *Server) register() {
 		}
 		return output(v)
 	})
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: "report_usage", Description: "Report model and tool usage for an assigned task. Worker identity and MCP call count are server-controlled."}, func(ctx context.Context, _ *mcp.CallToolRequest, in usageInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "report_usage", Description: "Report usage for a task. MCPCalls is a server-controlled cumulative SESSION snapshot including this call, not a per-task count. Do not sum snapshots. WorkerSessionID identifies the session."}, func(ctx context.Context, _ *mcp.CallToolRequest, in usageInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		var calls int64
 		_ = s.Service.Store.DB.QueryRowContext(ctx, `SELECT mcp_calls FROM worker_sessions WHERE id=?`, s.Agent.Session.ID).Scan(&calls)
@@ -200,16 +224,19 @@ func (s *Server) register() {
 		}
 		v.MCPCalls = &calls
 		_, _ = s.Service.Store.DB.ExecContext(ctx, `UPDATE usage_events SET mcp_calls=? WHERE id=?`, calls, v.ID)
-		return output(v)
+		return output(struct {
+			core.UsageEvent
+			MCPCallsScope string `json:"mcp_calls_scope"`
+		}{v, "session_total_including_this_call"})
 	})
 }
 func (s *Server) addMove(name, target string) {
-	mcp.AddTool(s.MCP, &mcp.Tool{Name: name, Description: "Move an assigned task forward to " + target + "."}, func(ctx context.Context, _ *mcp.CallToolRequest, in taskIDInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: name, Description: "Move an assigned task forward to " + target + ". Leave pending human/hybrid tasks in testing, provide handoff instructions, then finish the session or continue another task; never wait or poll."}, func(ctx context.Context, _ *mcp.CallToolRequest, in taskIDInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		v, e := s.Service.AgentMove(ctx, s.Agent, in.TaskID, target)
 		if e != nil {
 			return failure(e)
 		}
-		return output(v)
+		return output(s.summary(ctx, v))
 	})
 }

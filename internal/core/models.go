@@ -8,6 +8,7 @@ import (
 var (
 	ErrNotFound          = errors.New("NOT_FOUND")
 	ErrTaskNotAccessible = errors.New("TASK_NOT_ACCESSIBLE")
+	ErrAmbiguousTaskID   = errors.New("AMBIGUOUS_TASK_ID: use the full UUID or a longer unique prefix")
 	ErrInvalidTransition = errors.New("INVALID_TRANSITION")
 	ErrHumanTestPending  = errors.New("HUMAN_TEST_PENDING")
 	ErrWorkerDisabled    = errors.New("WORKER_DISABLED")

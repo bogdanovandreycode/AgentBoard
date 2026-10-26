@@ -1,22 +1,42 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"sync"
 	"time"
 
 	"github.com/bogdanovandreycode/agentboard/internal/core"
 	"github.com/bogdanovandreycode/agentboard/internal/service"
 	"github.com/go-chi/chi/v5"
-	"github.com/bogdanovandreycode/agentboard/internal/mcpserver"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type API struct{ Service *service.Service }
+
+type diagnosticOutput struct {
+	mu     sync.Mutex
+	buffer bytes.Buffer
+}
+
+func (b *diagnosticOutput) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buffer.Write(p)
+}
+
+func (b *diagnosticOutput) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buffer.String()
+}
 
 func New(s *service.Service) http.Handler {
 	a := &API{Service: s}
@@ -285,14 +305,22 @@ func (a *API) usage(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) getSettings(w http.ResponseWriter, r *http.Request) {
 	v, err := a.Service.GetProjectSettings(r.Context(), chi.URLParam(r, "projectID"))
-	if err != nil { writeError(w, err); return }
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	write(w, http.StatusOK, v)
 }
 func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 	var in service.ProjectSettings
-	if !decode(w, r, &in) { return }
+	if !decode(w, r, &in) {
+		return
+	}
 	v, err := a.Service.UpdateProjectSettings(r.Context(), chi.URLParam(r, "projectID"), in)
-	if err != nil { writeError(w, err); return }
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	write(w, http.StatusOK, v)
 }
 func (a *API) workers(w http.ResponseWriter, r *http.Request) {
@@ -325,26 +353,47 @@ func (a *API) worker(w http.ResponseWriter, r *http.Request) {
 }
 func (a *API) checkWorkerMCP(w http.ResponseWriter, r *http.Request) {
 	worker, err := a.Service.Store.GetWorker(r.Context(), chi.URLParam(r, "workerID"))
-	if err != nil { writeError(w, err); return }
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	project, err := a.Service.Store.GetProject(r.Context(), worker.ProjectID)
-	if err != nil { writeError(w, err); return }
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	executable, err := os.Executable()
-	if err != nil { writeError(w, err); return }
-	result := map[string]any{"executable": executable, "projectPath": project.Path, "workerSlug": worker.Slug, "enabled": worker.Enabled && !worker.Archived, "clientConnected": worker.ActiveSessionCount > 0, "toolCount": 0, "serverOK": false}
-	if !worker.Enabled || worker.Archived { write(w, http.StatusOK, result); return }
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	result := map[string]any{"executable": executable, "databasePath": a.Service.Store.DatabasePath(), "projectPath": project.Path, "workerSlug": worker.Slug, "enabled": worker.Enabled && !worker.Archived, "clientConnected": worker.ActiveSessionCount > 0, "toolCount": 0, "serverOK": false}
+	if !worker.Enabled || worker.Archived {
+		write(w, http.StatusOK, result)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	serverTransport, clientTransport := mcp.NewInMemoryTransports()
-	server := mcpserver.New(a.Service, core.AgentContext{Project: project, Worker: worker}, "check")
-	serverSession, err := server.MCP.Connect(ctx, serverTransport, nil)
-	if err != nil { result["error"] = err.Error(); write(w, http.StatusOK, result); return }
-	defer serverSession.Close()
+	// Exercise the real stdio executable, project/worker lookup and database,
+	// rather than constructing an in-memory server that cannot detect these errors.
+	command := exec.CommandContext(ctx, executable, "mcp", "--project", project.Path, "--worker", worker.Slug, "--db", a.Service.Store.DatabasePath())
+	command.Dir = project.Path
+	var stderr diagnosticOutput
+	command.Stderr = &stderr
 	client := mcp.NewClient(&mcp.Implementation{Name: "agentboard-check", Version: "1"}, nil)
-	clientSession, err := client.Connect(ctx, clientTransport, nil)
-	if err != nil { result["error"] = err.Error(); write(w, http.StatusOK, result); return }
+	clientSession, err := client.Connect(ctx, &mcp.CommandTransport{Command: command}, &mcp.ClientSessionOptions{ProtocolVersion: "2025-03-26"})
+	if err != nil {
+		result["error"] = fmt.Sprintf("MCP_STARTUP_FAILED: %v; %s", err, stderr.String())
+		write(w, http.StatusOK, result)
+		return
+	}
 	defer clientSession.Close()
 	tools, err := clientSession.ListTools(ctx, nil)
-	if err != nil { result["error"] = err.Error(); write(w, http.StatusOK, result); return }
+	if err != nil {
+		result["error"] = err.Error()
+		write(w, http.StatusOK, result)
+		return
+	}
 	result["toolCount"] = len(tools.Tools)
 	result["serverOK"] = len(tools.Tools) > 0
 	write(w, http.StatusOK, result)

@@ -32,7 +32,7 @@ type WorkerInfo = {
   LastActivityAt?: string;
   Harness: string;
 };
-type MCPCheck = { executable: string; projectPath: string; workerSlug: string; enabled: boolean; clientConnected: boolean; toolCount: number; serverOK: boolean; error?: string };
+type MCPCheck = { executable: string; databasePath: string; projectPath: string; workerSlug: string; enabled: boolean; clientConnected: boolean; toolCount: number; serverOK: boolean; error?: string };
 async function read<T>(path: string): Promise<T> {
   const response = await fetch(`/api${path}`);
   if (!response.ok)
@@ -66,7 +66,7 @@ export function WorkerDiagnostics({
     refetchOnWindowFocus: false,
   });
   const current = info.data || worker;
-  const config = mcpConfiguration(current.Harness, projectPath, current.Slug, check.data?.executable || "agentboard");
+  const config = mcpConfiguration(current.Harness, projectPath, current.Slug, check.data?.executable || "agentboard", check.data?.databasePath);
   return (
     <Panel className="worker-diagnostics" header={t("MCP diagnostics")} toggleable>
       <div className="diagnostic-status">
@@ -81,6 +81,7 @@ export function WorkerDiagnostics({
           : t("Never")}
       </p>
       <p>{t("Project:")} {projectPath}</p>
+      <Message severity="info" text={t("Enabled allows this worker to connect; it does not confirm a successful client connection. The HTTP server and MCP worker can use different projects. A workspace mismatch requires confirmation or returns an error.")} />
       <Message severity="info" text={t("Open sessions are active while the MCP process sends a heartbeat. After 90 seconds without a heartbeat, they become offline.")} />
       {(info.error || sessions.error) && (
         <Message severity="error" text={(info.error || sessions.error)?.message} />

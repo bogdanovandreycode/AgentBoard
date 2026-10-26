@@ -21,11 +21,11 @@ func id() string                            { return uuid.NewString() }
 func (s *Service) BeginAgentSession(ctx context.Context, projectPath, workerRef, client string) (core.AgentContext, error) {
 	p, err := s.Store.GetProjectByPath(ctx, projectPath)
 	if err != nil {
-		return core.AgentContext{}, err
+		return core.AgentContext{}, fmt.Errorf("PROJECT_LOOKUP_FAILED: project %q: %w; check --project and --db", projectPath, err)
 	}
 	w, err := s.Store.FindWorker(ctx, p.ID, workerRef)
 	if err != nil {
-		return core.AgentContext{}, err
+		return core.AgentContext{}, fmt.Errorf("WORKER_LOOKUP_FAILED: worker %q in project %q: %w; copy this project's worker slug from Workers", workerRef, p.Path, err)
 	}
 	if !w.Enabled || w.Archived {
 		return core.AgentContext{}, core.ErrWorkerDisabled
@@ -72,6 +72,7 @@ func (s *Service) AgentTask(ctx context.Context, a core.AgentContext, taskID str
 	if err != nil {
 		return core.TaskDetails{}, err
 	}
+	taskID = t.ID
 	if err = s.loadAgentContext(ctx, &t); err != nil {
 		return core.TaskDetails{}, err
 	}
@@ -94,7 +95,11 @@ func (s *Service) AgentTask(ctx context.Context, a core.AgentContext, taskID str
 }
 
 func (s *Service) accessibleTask(ctx context.Context, a core.AgentContext, taskID string) (core.Task, error) {
-	t, err := s.Store.GetTask(ctx, taskID)
+	resolved, err := s.ResolveAgentTaskID(ctx, a, taskID)
+	if err != nil {
+		return core.Task{}, err
+	}
+	t, err := s.Store.GetTask(ctx, resolved)
 	if err != nil {
 		return t, core.ErrTaskNotAccessible
 	}
@@ -234,9 +239,11 @@ func (s *Service) validateAssignee(ctx context.Context, projectID string, a core
 }
 
 func (s *Service) AgentAddHistory(ctx context.Context, a core.AgentContext, taskID, content string) (core.HistoryEntry, error) {
-	if _, err := s.accessibleTask(ctx, a, taskID); err != nil {
+	task, err := s.accessibleTask(ctx, a, taskID)
+	if err != nil {
 		return core.HistoryEntry{}, err
 	}
+	taskID = task.ID
 	if strings.TrimSpace(content) == "" {
 		return core.HistoryEntry{}, core.ErrInvalidInput
 	}
@@ -249,7 +256,7 @@ func (s *Service) AgentAddHistory(ctx context.Context, a core.AgentContext, task
 	h := core.HistoryEntry{ID: id(), TaskID: taskID, ActorType: "agent", EntryType: "agent_comment", Content: content, CreatedAt: core.Now(), WorkerID: &a.Worker.ID, WorkerSessionID: &a.Session.ID, ActorName: a.Worker.Name}
 	h.Images, _ = s.ImageReferences(ctx, a.Project.ID, content)
 	h.Files, _ = s.FileReferences(ctx, a.Project.ID, content)
-	_, err := s.Store.DB.ExecContext(ctx, `INSERT INTO history_entries(id,task_id,actor_type,worker_id,worker_session_id,entry_type,content,created_at) VALUES(?,?,?,?,?,?,?,?)`, h.ID, h.TaskID, h.ActorType, h.WorkerID, h.WorkerSessionID, h.EntryType, h.Content, h.CreatedAt)
+	_, err = s.Store.DB.ExecContext(ctx, `INSERT INTO history_entries(id,task_id,actor_type,worker_id,worker_session_id,entry_type,content,created_at) VALUES(?,?,?,?,?,?,?,?)`, h.ID, h.TaskID, h.ActorType, h.WorkerID, h.WorkerSessionID, h.EntryType, h.Content, h.CreatedAt)
 	return h, err
 }
 
@@ -296,17 +303,21 @@ func (s *Service) canAgentVerify(ctx context.Context, t core.Task, workerID stri
 	if t.TestingMode == "human" {
 		return core.ErrHumanTestPending
 	}
-	var aiPass int
-	_ = s.Store.DB.QueryRowContext(ctx, `SELECT count(*) FROM test_runs WHERE task_id=? AND worker_id=? AND status='passed'`, t.ID, workerID).Scan(&aiPass)
-	if aiPass == 0 {
-		return core.ErrInvalidTransition
-	}
 	if t.TestingMode == "hybrid" {
 		var humanPass int
-		_ = s.Store.DB.QueryRowContext(ctx, `SELECT count(*) FROM test_runs WHERE task_id=? AND worker_id IS NULL AND status='passed'`, t.ID).Scan(&humanPass)
+		if err := s.Store.DB.QueryRowContext(ctx, `SELECT count(*) FROM test_runs WHERE task_id=? AND worker_id IS NULL AND status='passed'`, t.ID).Scan(&humanPass); err != nil {
+			return err
+		}
 		if humanPass == 0 {
 			return core.ErrHumanTestPending
 		}
+	}
+	var aiPass int
+	if err := s.Store.DB.QueryRowContext(ctx, `SELECT count(*) FROM test_runs WHERE task_id=? AND worker_id=? AND status='passed'`, t.ID, workerID).Scan(&aiPass); err != nil {
+		return err
+	}
+	if aiPass == 0 {
+		return core.ErrInvalidTransition
 	}
 	return nil
 }

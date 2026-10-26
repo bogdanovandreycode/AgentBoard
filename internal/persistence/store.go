@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/bogdanovandreycode/agentboard/internal/core"
@@ -37,21 +38,35 @@ var imagesMigration string
 var filesMigration string
 
 type Store struct {
-	DB       *sql.DB
-	imageDir string
+	DB           *sql.DB
+	imageDir     string
+	databasePath string
 }
 
-func DefaultDBPath() string {
+func DefaultDBPath() (string, error) {
 	base, err := os.UserConfigDir()
 	if err != nil {
-		base = os.TempDir()
+		// Some MCP hosts omit APPDATA from child process environments. Use the
+		// same Windows profile location instead of silently opening an empty DB.
+		if runtime.GOOS != "windows" {
+			return "", fmt.Errorf("resolve configuration directory: %w; set --db explicitly", err)
+		}
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return "", fmt.Errorf("resolve Windows profile: %w; set APPDATA or --db explicitly", homeErr)
+		}
+		base = filepath.Join(home, "AppData", "Roaming")
 	}
-	return filepath.Join(base, "AgentBoard", "agentboard.db")
+	return filepath.Join(base, "AgentBoard", "agentboard.db"), nil
 }
 
 func Open(path string) (*Store, error) {
 	if path == "" {
-		path = DefaultDBPath()
+		var err error
+		path, err = DefaultDBPath()
+		if err != nil {
+			return nil, err
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
@@ -212,8 +227,10 @@ func Open(path string) (*Store, error) {
 	if databasePath != "" {
 		imageDir = filepath.Join(filepath.Dir(databasePath), "images")
 	}
-	return &Store{DB: db, imageDir: imageDir}, nil
+	return &Store{DB: db, imageDir: imageDir, databasePath: databasePath}, nil
 }
+
+func (s *Store) DatabasePath() string { return s.databasePath }
 
 func (s *Store) Close() error { return s.DB.Close() }
 func newID() string           { return uuid.NewString() }
@@ -264,9 +281,17 @@ func (s *Store) GetProject(ctx context.Context, id string) (core.Project, error)
 	return p, err
 }
 func (s *Store) GetProjectByPath(ctx context.Context, path string) (core.Project, error) {
-	abs, _ := filepath.Abs(path)
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return core.Project{}, err
+	}
 	var p core.Project
-	err := s.DB.QueryRowContext(ctx, `SELECT id,name,path,created_at,updated_at FROM projects WHERE path=?`, filepath.Clean(abs)).Scan(&p.ID, &p.Name, &p.Path, &p.CreatedAt, &p.UpdatedAt)
+	query := `SELECT id,name,path,created_at,updated_at FROM projects WHERE path=?`
+	if runtime.GOOS == "windows" {
+		query += ` COLLATE NOCASE`
+		abs = strings.TrimPrefix(abs, `\\?\`)
+	}
+	err = s.DB.QueryRowContext(ctx, query, filepath.Clean(abs)).Scan(&p.ID, &p.Name, &p.Path, &p.CreatedAt, &p.UpdatedAt)
 	if err == sql.ErrNoRows {
 		err = core.ErrNotFound
 	}

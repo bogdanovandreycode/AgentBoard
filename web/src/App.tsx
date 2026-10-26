@@ -114,6 +114,7 @@ type TestRun = {
 };
 type Usage = {
   ID: string;
+  WorkerSessionID: string;
   WorkerName: string;
   Provider?: string;
   Model?: string;
@@ -1343,8 +1344,8 @@ function Tabs({
                 <dd>{u.ModelCalls ?? "—"}</dd>
                 <dt>{t("Tool calls")}</dt>
                 <dd>{u.ToolCalls ?? "—"}</dd>
-                <dt>{t("MCP calls")}</dt>
-                <dd>{u.MCPCalls ?? "—"}</dd>
+                <dt title={t("Cumulative session snapshot, not per-task. Do not sum snapshots.")}>{t("MCP calls (session snapshot)")}</dt>
+                <dd title={u.WorkerSessionID}>{u.MCPCalls ?? "—"}</dd>
               </dl>
             </Card>
           ))}
