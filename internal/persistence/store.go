@@ -37,6 +37,9 @@ var imagesMigration string
 //go:embed migrations/007_files.sql
 var filesMigration string
 
+//go:embed migrations/008_global_settings_drafts.sql
+var globalSettingsDraftsMigration string
+
 type Store struct {
 	DB           *sql.DB
 	imageDir     string
@@ -218,6 +221,30 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	tx, err = db.Begin()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if _, err = tx.Exec("UPDATE schema_migrations SET version=version WHERE version=1"); err == nil {
+		var count int
+		err = tx.QueryRow("SELECT count(*) FROM schema_migrations WHERE version=8").Scan(&count)
+		if err == nil && count == 0 {
+			_, err = tx.Exec(globalSettingsDraftsMigration)
+			if err == nil {
+				_, err = tx.Exec("INSERT INTO schema_migrations(version,applied_at) VALUES(8,?)", core.Now())
+			}
+		}
+	}
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		return nil, fmt.Errorf("migrate v8: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		db.Close()
+		return nil, err
+	}
 	var databasePath string
 	if err = db.QueryRow("SELECT file FROM pragma_database_list WHERE name='main'").Scan(&databasePath); err != nil {
 		db.Close()
@@ -256,7 +283,14 @@ func (s *Store) EnsureProject(ctx context.Context, name, path string) (core.Proj
 }
 
 func (s *Store) ListProjects(ctx context.Context) ([]core.Project, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT id,name,path,created_at,updated_at FROM projects ORDER BY name`)
+	rows, err := s.DB.QueryContext(ctx, `WITH activity AS (
+		SELECT project_id,updated_at AS at FROM tasks
+		UNION ALL SELECT t.project_id,h.created_at FROM history_entries h JOIN tasks t ON t.id=h.task_id
+		UNION ALL SELECT project_id,created_at FROM usage_events
+	) SELECT p.id,p.name,p.path,p.created_at,p.updated_at,
+		(SELECT count(*) FROM tasks t WHERE t.project_id=p.id),
+		COALESCE((SELECT at FROM activity WHERE project_id=p.id ORDER BY julianday(at) DESC,at DESC LIMIT 1),p.updated_at)
+		FROM projects p ORDER BY p.name`)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +298,7 @@ func (s *Store) ListProjects(ctx context.Context) ([]core.Project, error) {
 	var out []core.Project
 	for rows.Next() {
 		var p core.Project
-		if err = rows.Scan(&p.ID, &p.Name, &p.Path, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err = rows.Scan(&p.ID, &p.Name, &p.Path, &p.CreatedAt, &p.UpdatedAt, &p.TaskCount, &p.LastActivityAt); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
@@ -414,6 +448,22 @@ func (s *Store) EndSession(ctx context.Context, id string) error {
 }
 
 func (s *Store) CreateTask(ctx context.Context, projectID string, in core.TaskInput) (core.Task, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return core.Task{}, err
+	}
+	defer tx.Rollback()
+	task, err := s.CreateTaskTx(ctx, tx, projectID, in)
+	if err != nil {
+		return task, err
+	}
+	if err = tx.Commit(); err != nil {
+		return task, err
+	}
+	return s.GetTask(ctx, task.ID)
+}
+
+func (s *Store) CreateTaskTx(ctx context.Context, tx *sql.Tx, projectID string, in core.TaskInput) (core.Task, error) {
 	if in.State == "" {
 		in.State = "backlog"
 	}
@@ -427,16 +477,11 @@ func (s *Store) CreateTask(ctx context.Context, projectID string, in core.TaskIn
 		in.Assignee.Type = "unassigned"
 	}
 	if in.Position == 0 {
-		_ = s.DB.QueryRowContext(ctx, `SELECT COALESCE(MAX(position),0)+1000 FROM tasks WHERE project_id=? AND state=? AND board_column=?`, projectID, in.State, in.BoardColumn).Scan(&in.Position)
+		_ = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(position),0)+1000 FROM tasks WHERE project_id=? AND state=? AND board_column=?`, projectID, in.State, in.BoardColumn).Scan(&in.Position)
 	}
 	now := core.Now()
 	t := core.Task{ID: newID(), ProjectID: projectID, Title: in.Title, Description: in.Description, State: in.State, BoardColumn: in.BoardColumn, Position: in.Position, Priority: in.Priority, AssigneeType: in.Assignee.Type, AssigneeWorkerID: in.Assignee.WorkerID, CreatedByType: "human", SourceTaskID: in.SourceTaskID, TestingMode: in.TestingMode, AITestInstructions: in.AITestInstructions, HumanTestInstructions: in.HumanTestInstructions, CreatedAt: now, UpdatedAt: now}
-	tx, err := s.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return t, err
-	}
-	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `INSERT INTO tasks(id,project_id,title,description,state,board_column,position,priority,assignee_type,assignee_worker_id,created_by_type,source_task_id,testing_mode,ai_test_instructions,human_test_instructions,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, t.ID, projectID, t.Title, t.Description, t.State, t.BoardColumn, t.Position, t.Priority, t.AssigneeType, t.AssigneeWorkerID, t.CreatedByType, t.SourceTaskID, t.TestingMode, t.AITestInstructions, t.HumanTestInstructions, now, now)
+	_, err := tx.ExecContext(ctx, `INSERT INTO tasks(id,project_id,title,description,state,board_column,position,priority,assignee_type,assignee_worker_id,created_by_type,source_task_id,testing_mode,ai_test_instructions,human_test_instructions,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, t.ID, projectID, t.Title, t.Description, t.State, t.BoardColumn, t.Position, t.Priority, t.AssigneeType, t.AssigneeWorkerID, t.CreatedByType, t.SourceTaskID, t.TestingMode, t.AITestInstructions, t.HumanTestInstructions, now, now)
 	if err != nil {
 		return t, err
 	}
@@ -458,10 +503,7 @@ func (s *Store) CreateTask(ctx context.Context, projectID string, in core.TaskIn
 			return t, err
 		}
 	}
-	if err = tx.Commit(); err != nil {
-		return t, err
-	}
-	return s.GetTask(ctx, t.ID)
+	return t, nil
 }
 
 const taskSelect = `SELECT t.id,t.project_id,t.title,t.description,t.state,t.position,t.priority,t.assignee_type,t.assignee_worker_id,t.created_by_type,t.created_by_worker_id,t.created_by_session_id,t.source_task_id,t.testing_mode,t.ai_test_instructions,t.human_test_instructions,t.created_at,t.updated_at,COALESCE(aw.name,''),COALESCE(cw.name,''),t.board_column FROM tasks t LEFT JOIN workers aw ON aw.id=t.assignee_worker_id LEFT JOIN workers cw ON cw.id=t.created_by_worker_id`

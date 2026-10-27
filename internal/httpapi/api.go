@@ -47,6 +47,14 @@ func New(s *service.Service) http.Handler {
 		})
 		r.Get("/projects", a.listProjects)
 		r.Post("/projects", a.createProject)
+		r.Patch("/projects/{projectID}", a.updateProject)
+		r.Post("/folders/pick", a.pickFolder)
+		r.Get("/settings/global", a.getGlobalSettings)
+		r.Put("/settings/global", a.putGlobalSettings)
+		r.Get("/projects/{projectID}/drafts", a.listDrafts)
+		r.Put("/projects/{projectID}/drafts/{draftID}", a.saveDraft)
+		r.Delete("/projects/{projectID}/drafts/{draftID}", a.discardDraft)
+		r.Post("/projects/{projectID}/drafts/{draftID}/publish", a.publishDraft)
 		r.Get("/projects/{projectID}/board", a.board)
 		r.Get("/projects/{projectID}/settings", a.getSettings)
 		r.Put("/projects/{projectID}/settings", a.putSettings)
@@ -116,7 +124,9 @@ func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	if errors.Is(err, core.ErrNotFound) {
 		status = http.StatusNotFound
-	} else if errors.Is(err, core.ErrInvalidInput) || errors.Is(err, core.ErrInvalidTransition) || errors.Is(err, core.ErrHumanTestPending) {
+	} else if errors.Is(err, core.ErrDraftConflict) {
+		status = http.StatusConflict
+	} else if errors.Is(err, core.ErrInvalidInput) || errors.Is(err, core.ErrInvalidTransition) || errors.Is(err, core.ErrHumanTestPending) || errors.Is(err, core.ErrDraftIncomplete) {
 		status = http.StatusBadRequest
 	} else if errors.Is(err, core.ErrTaskNotAccessible) {
 		status = http.StatusForbidden

@@ -14,6 +14,8 @@ AgentBoard is a local task board where human and AI workers work on common tasks
 ## What the MVP includes
 
 - A local project board with task search, JSON import, custom columns and properties.
+- Project cards with task counts and latest activity, plus project name/folder editing.
+- Recoverable task drafts with configurable autosave and save-on-blur across all boards.
 - Worker-specific MCP access with explicit AI transitions and human final acceptance.
 - Shared task history, testing instructions, artifacts, AI costs and worker connection diagnostics.
 - Image and file attachments in Markdown descriptions and comments, with WebP image storage and upload/read access for AI workers over MCP.

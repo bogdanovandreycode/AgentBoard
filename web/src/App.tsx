@@ -1,3 +1,8 @@
+import { useTaskDraft } from "./useTaskDraft";
+import { TaskDraftsDialog } from "./TaskDraftsDialog";
+import { readActiveDraft, type TaskDraft } from "./taskDrafts";
+import { api, withVisibleLoading } from "./api";
+import { NotificationContext, useNotify, type Notify } from "./notifications";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import {
   DndContext,
@@ -52,7 +57,7 @@ import { MarkdownField, MarkdownView } from "./MarkdownField";
 import { imageReferenceSummary } from "./imageReferences";
 import { capabilityPresets, relativeTime } from "./workerPresentation";
 import { SettingsPage } from "./SettingsPage";
-import { ProjectsPage } from "./ProjectsPage";
+import { ProjectsPage, type Project } from "./ProjectsPage";
 import { playAgentMoveSound } from "./notificationSound";
 import { builtInColumns, formatDate, type ProjectSettings } from "./settings";
 import { setLanguage, t, t as translate } from "./i18n";
@@ -63,7 +68,6 @@ import "./Properties.css";
 import "./PrimeLayout.css";
 import "./Themes.css";
 
-type Project = { ID: string; Name: string; Path: string };
 type Worker = {
   ID: string;
   Name: string;
@@ -166,27 +170,9 @@ type Details = Task & {
   Properties: { PropertyDefinitionID: string; Name: string; Type: string; Value: string }[];
 };
 type Board = Record<string, Task[]>;
-async function api<T>(url: string, options?: RequestInit): Promise<T> {
-  const r = await fetch("/api" + url, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!r.ok) {
-    const e = await r.json().catch(() => ({ error: r.statusText }));
-    throw new Error(e.error || r.statusText);
-  }
-  return r.status === 204 ? (undefined as T) : r.json();
-}
 const short = (id: string) => id.slice(0, 8).toUpperCase();
 const DateContext = createContext({ timezone: "local", language: "system" });
-type Notify = (severity: "success" | "error", summary: string, detail?: string) => void;
-const NotificationContext = createContext<Notify>(() => {});
-const useNotify = () => useContext(NotificationContext);
 const saveTransition = { appear: true, timeout: { enter: 280, exit: 220 } };
-async function withVisibleLoading<T>(request: Promise<T>): Promise<T> {
-  const [value] = await Promise.all([request, new Promise<void>((resolve) => window.setTimeout(resolve, 350))]);
-  return value;
-}
 function useDateFormat() {
   const { timezone, language } = useContext(DateContext);
   return (value: string) => formatDate(value, timezone, language);
@@ -207,7 +193,9 @@ function App() {
       () => new URLSearchParams(location.search).get("project") || "",
     ),
     [selected, setSelected] = useState<string>(),
-    [create, setCreate] = useState(false),
+    [create, setCreate] = useState(() => !!readActiveDraft(projectID)),
+    [currentDraft, setCurrentDraft] = useState<TaskDraft | undefined>(() => readActiveDraft(projectID)),
+    [draftsOpen, setDraftsOpen] = useState(false),
     [searchOpen, setSearchOpen] = useState(false),
     [draggedID, setDraggedID] = useState<string>(),
     [boardMode, setBoardMode] = useState<"fit" | "wide">(() => localStorage.getItem("agentboard-board-mode") === "wide" ? "wide" : "fit"),
@@ -277,6 +265,7 @@ function App() {
     }).catch(() => {});
   }, [active, board.data]);
   const refresh = () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["board", active] });
       qc.invalidateQueries({ queryKey: ["workers", active] });
     },
@@ -295,14 +284,21 @@ function App() {
     history.pushState(null, "", url);
     setProjectID(id);
     setSelected(undefined);
-    setCreate(false);
+    const recovery = readActiveDraft(id);
+    setCurrentDraft(recovery);
+    setCreate(!!recovery);
+    setDraftsOpen(false);
     setTab("board");
   };
   useEffect(() => {
     const onPop = () => {
-      setProjectID(new URLSearchParams(location.search).get("project") || "");
+      const id = new URLSearchParams(location.search).get("project") || "";
+      setProjectID(id);
       setSelected(undefined);
-      setCreate(false);
+      const recovery = readActiveDraft(id);
+      setCurrentDraft(recovery);
+      setCreate(!!recovery);
+      setDraftsOpen(false);
       setTab("board");
     };
     window.addEventListener("popstate", onPop);
@@ -329,7 +325,7 @@ function App() {
         subtitle={projects.error.message}
       />
     );
-  if (!active) return <ProjectsPage projects={projects.data || []} invalidProject={!!projectID} onOpen={selectProject} />;
+  if (!active) return <NotificationContext.Provider value={notify}><Toast ref={toast} position="top-right" /><ProjectsPage projects={projects.data || []} invalidProject={!!projectID} onOpen={selectProject} /></NotificationContext.Provider>;
   return (
     <NotificationContext.Provider value={notify}>
     <DateContext.Provider value={{ timezone: settings.data?.timezone || "local", language: settings.data?.language || "system" }}>
@@ -405,10 +401,10 @@ function App() {
             </h1>
           </div>
           {tab === "board" && (
-            <Button className="primary" onClick={() => setCreate(true)}>
+            <div className="task-create-actions"><Button label={t("Drafts")} icon="pi pi-file-edit" text onClick={() => setDraftsOpen(true)} /><Button className="primary" onClick={() => { setCurrentDraft(undefined); setCreate(true); }}>
               <Plus size={17} />
               {t("New task")}
-            </Button>
+            </Button></div>
           )}
         </header>
         {tab === "board" ? (
@@ -470,6 +466,8 @@ function App() {
       )}{" "}
       {create && (
         <TaskForm
+          key={active + (currentDraft?.ID || "new")}
+          initialDraft={currentDraft}
           projectID={active}
           columns={columns}
           workers={workers.data || []}
@@ -477,6 +475,7 @@ function App() {
           refresh={refresh}
         />
       )}
+      {draftsOpen && <TaskDraftsDialog projectID={active} close={() => setDraftsOpen(false)} open={(draft) => { setCurrentDraft(draft); setDraftsOpen(false); setCreate(true); }} />}
       {searchOpen && <SearchTasks tasks={allTasks} onOpen={(id) => { setSearchOpen(false); setSelected(id); }} close={() => setSearchOpen(false)} />}
     </div>
     </DateContext.Provider>
@@ -745,12 +744,14 @@ function TaskCard({
 }
 
 function TaskForm({
+  initialDraft,
   projectID,
   columns,
   workers,
   close,
   refresh,
 }: {
+  initialDraft?: TaskDraft;
   projectID: string;
   columns: { id: string; name: string }[];
   workers: Worker[];
@@ -769,50 +770,33 @@ function TaskForm({
       queryFn: () => api<Board>(`/projects/${projectID}/board`),
     }),
     allTasks = Object.values(board.data || {}).flat();
-  const [form, setForm] = useState({
-      Title: "",
-      Description: "",
-      State: "backlog",
-      Priority: "medium",
-      TestingMode: "ai",
-      AssigneeType: "unassigned",
-      AssigneeWorkerID: "",
-      AITestInstructions: "",
-      HumanTestInstructions: "",
-      DependencyIDs: [] as string[],
-      Properties: {} as Record<string, string>,
-    }),
-    save = useMutation({
-      mutationFn: () =>
-        withVisibleLoading(api(`/projects/${projectID}/tasks`, {
-          method: "POST",
-          body: JSON.stringify({
-            ...form,
-            State: form.State.startsWith("custom-") ? "backlog" : form.State,
-            BoardColumn: form.State.startsWith("custom-") ? form.State : "",
-            Assignee: {
-              type: form.AssigneeType,
-              worker_id:
-                form.AssigneeType === "worker"
-                  ? form.AssigneeWorkerID
-                  : undefined,
-            },
-          }),
-        })),
-      onSuccess: () => {
-        refresh();
-        notify("success", t("Task saved"));
-        setSaved(true);
-      },
-      onError: (error) => notify("error", t("Save failed"), error.message),
-    });
+  const draft = useTaskDraft(projectID, initialDraft);
+  const { form, setForm } = draft;
+  const closeDraft = () => { draft.deactivate(); void draft.flush().catch(() => {}); close(); };
+  const save = useMutation({
+    mutationFn: () => withVisibleLoading(draft.missingFields.length ? draft.flush() : draft.publish()),
+    onSuccess: () => {
+      refresh();
+      notify("success", t(draft.missingFields.length ? "Draft saved" : "Task saved"));
+      setSaved(true);
+    },
+    onError: (error) => notify("error", t("Save failed"), error.message),
+  });
   if (definitions.data === undefined || !board.data) {
     const error = definitions.error || board.error;
-    return error ? <Modal title={t("Create task")} close={close}><Message severity="error" text={error.message} /></Modal> : null;
+    return error ? <Modal title={t("Create task")} close={closeDraft}><Message severity="error" text={error.message} /></Modal> : null;
   }
   return (
-    <Modal title={t("Create task")} close={close} closing={saved}>
-      <div className="form-grid">
+    <Modal title={t("Create task")} close={closeDraft} closing={saved}>
+      <div className="draft-save-status" role="status" aria-live="polite" data-status={draft.status}>
+        <i className={draft.status === "saving" ? "pi pi-spin pi-spinner" : draft.status === "saved" ? "pi pi-check-circle" : "pi pi-file-edit"} />
+        {t(({ empty: "Empty form — no draft saved", dirty: "Unsaved changes — recovery copy kept locally", saving: "Saving draft…", saved: "Draft saved", error: "Autosave failed — recovery copy kept locally" } as Record<string,string>)[draft.status])}
+      </div>
+      {!!draft.missingFields.length && draft.meaningful && <p className="draft-requirements">{t("Required to create a task")}: {draft.missingFields.map(t).join(", ")}</p>}
+      {(draft.error || draft.settingsError) && <Message severity="error" text={draft.error || draft.settingsError} />}
+      {draft.error.includes("DRAFT_CONFLICT") && <Button label={t("Recover as a new draft")} text onClick={() => { void draft.recoverAsNew().catch(() => {}); }} />}
+      {draft.storageError && <Message severity="warn" text={t("Local recovery storage is unavailable. Save the draft to the server before closing.")} />}
+      <div className="form-grid" onBlurCapture={draft.onBlur}>
         <label className="wide">
           {t("Title")}
           <InputText
@@ -831,8 +815,10 @@ function TaskForm({
           {t("State")}
           <SelectField
             value={form.State}
+            placeholder={t("Choose state")}
             onChange={(e) => setForm({ ...form, State: e.target.value })}
           >
+            <option value="">{t("Choose state")}</option>
             {columns.map((s) => (
               <option key={s.id} value={s.id}>
                 {t(s.name)}
@@ -933,10 +919,11 @@ function TaskForm({
       </div>
       {save.error && <Message severity="error" text={save.error.message} className="action-error" />}
       <DialogActions
-        close={close}
+        close={closeDraft}
         save={() => save.mutate()}
         busy={save.isPending}
-        disabled={!form.Title || uploadingAttachments}
+        saveLabel={t(draft.missingFields.length ? "Save draft" : "Create task")}
+        disabled={!draft.meaningful || uploadingAttachments}
       />
     </Modal>
   );
@@ -1772,18 +1759,20 @@ function DialogActions({
   save,
   busy,
   disabled,
+  saveLabel,
 }: {
   close: () => void;
   save: () => void;
   busy: boolean;
   disabled?: boolean;
+  saveLabel?: string;
 }) {
   const animatedClose = useContext(ModalCloseContext) || close;
   return (
     <Toolbar className="dialog-actions" end={<>
       <Button label={t("Cancel")} text severity="secondary" onClick={animatedClose} />
       <Button className="primary" loading={busy} disabled={busy || disabled} onClick={save}>
-        {busy ? t("Saving…") : t("Save")}
+        {busy ? t("Saving…") : saveLabel || t("Save")}
       </Button>
     </>} />
   );

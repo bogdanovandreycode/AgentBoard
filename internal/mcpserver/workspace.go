@@ -57,6 +57,14 @@ func (s *Server) checkWorkspace(ctx context.Context, req *mcp.CallToolRequest) *
 	if s.Workspace == nil || s.Workspace.AllowMismatch {
 		return nil
 	}
+	settings, err := s.Service.GetGlobalSettings(ctx)
+	if err != nil {
+		return workspaceFailure("GLOBAL_SETTINGS_UNAVAILABLE: " + err.Error())
+	}
+	if !settings.CheckProjectContext {
+		s.invalidateWorkspace(req.Session)
+		return nil
+	}
 	s.guard.Lock()
 	state := s.guard.sessions[req.Session]
 	if state == nil {

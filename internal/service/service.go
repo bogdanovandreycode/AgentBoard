@@ -414,19 +414,27 @@ func (s *Service) HumanBoard(ctx context.Context, projectID string) (core.Board,
 }
 
 func (s *Service) HumanCreateTask(ctx context.Context, projectID string, in core.TaskInput) (core.Task, error) {
-	if _, err := s.ImageReferencesInTexts(ctx, projectID, in.Description, in.AITestInstructions, in.HumanTestInstructions); err != nil {
+	in, err := s.prepareHumanTask(ctx, projectID, in)
+	if err != nil {
 		return core.Task{}, err
+	}
+	return s.Store.CreateTask(ctx, projectID, in)
+}
+
+func (s *Service) prepareHumanTask(ctx context.Context, projectID string, in core.TaskInput) (core.TaskInput, error) {
+	if _, err := s.ImageReferencesInTexts(ctx, projectID, in.Description, in.AITestInstructions, in.HumanTestInstructions); err != nil {
+		return core.TaskInput{}, err
 	}
 	if _, err := s.FileReferences(ctx, projectID, in.Description, in.AITestInstructions, in.HumanTestInstructions); err != nil {
-		return core.Task{}, err
+		return core.TaskInput{}, err
 	}
 	if err := s.validatePropertyValues(ctx, projectID, in.Properties, false); err != nil {
-		return core.Task{}, err
+		return core.TaskInput{}, err
 	}
 	if in.BoardColumn != "" {
 		state, boardColumn, err := s.resolveHumanColumn(ctx, projectID, in.BoardColumn)
 		if err != nil || boardColumn == "" {
-			return core.Task{}, core.ErrInvalidInput
+			return core.TaskInput{}, core.ErrInvalidInput
 		}
 		in.State, in.BoardColumn = state, boardColumn
 	}
@@ -434,15 +442,15 @@ func (s *Service) HumanCreateTask(ctx context.Context, projectID string, in core
 		in.Assignee.Type = "unassigned"
 	}
 	if err := s.validateAssignee(ctx, projectID, in.Assignee, false); err != nil {
-		return core.Task{}, err
+		return core.TaskInput{}, err
 	}
 	for _, dependencyID := range in.DependencyIDs {
 		dependency, err := s.Store.GetTask(ctx, dependencyID)
 		if err != nil || dependency.ProjectID != projectID {
-			return core.Task{}, core.ErrInvalidInput
+			return core.TaskInput{}, core.ErrInvalidInput
 		}
 	}
-	return s.Store.CreateTask(ctx, projectID, in)
+	return in, nil
 }
 
 func (s *Service) HumanTask(ctx context.Context, taskID string) (core.TaskDetails, error) {

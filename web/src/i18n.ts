@@ -72,6 +72,21 @@ const russianExtra: Record<string, string> = {
   "Choose JSON file": "Выбрать JSON-файл", "Drag a JSON file here": "Перетащите JSON-файл сюда", "or click Choose JSON file above": "или нажмите «Выбрать JSON-файл» выше", "Choose a JSON file.": "Выберите JSON-файл.", "Remove selected file": "Убрать выбранный файл",
 };
 const localeOverrides: Record<string, Record<string, string>> = {
+  ru: {
+    "Recover as a new draft": "Восстановить как новый черновик",
+    "Global settings": "Глобальные настройки", "Save global settings": "Сохранить глобальные настройки",
+    "These settings apply to all project boards and MCP workers using this AgentBoard database.": "Эти настройки применяются ко всем доскам проектов и MCP-воркерам этого AgentBoard.",
+    "Task drafts and autosave": "Черновики задач и автосохранение", "Timed autosave": "Автосохранение по таймеру", "Autosave interval (seconds)": "Интервал автосохранения (сек.)", "Save when leaving a field": "Сохранять при выходе из поля",
+    "MCP project context": "Рабочий проект MCP", "Check the worker project against its launch directory and client workspace": "Проверять соответствие проекта воркера папке запуска и рабочему пространству клиента",
+    "When enabled, a mismatch asks for confirmation; clients without question support receive an error. When disabled, workers use their configured project without this check. Task workflow permissions always remain enforced. Changes apply to existing MCP sessions on their next tool call.": "Если проверка включена, при несовпадении будет задан вопрос. Клиенты без поддержки вопросов получат ошибку. Если проверка выключена, воркер использует настроенный проект без этой проверки. Права на задачи сохраняются в любом случае. Изменения применяются к существующим MCP-сессиям при следующем вызове инструмента.",
+    "Project context checks disabled globally": "Проверка проекта отключена глобально", "Project context checks enabled globally": "Проверка проекта включена глобально",
+    "Edit project": "Изменить проект", "Project name": "Название проекта", "Project folder": "Папка проекта", "Choose project folder": "Выбрать папку проекта", "Folder selection failed": "Не удалось выбрать папку", "Project saved": "Проект сохранён",
+    "Changing the folder updates the registered project path. Your files are not moved.": "Выбор папки изменяет зарегистрированный путь проекта. Файлы не перемещаются.",
+    "Last task activity": "Последнее действие с задачей", "No task activity yet": "Действий с задачами пока нет", "Tasks": "Задач",
+    "Drafts": "Черновики", "Task drafts": "Черновики задач", "No drafts yet": "Черновиков пока нет", "Untitled draft": "Черновик без названия", "Saved draft": "Сохранённый черновик", "Local recovery copy": "Локальная копия для восстановления", "Resume draft": "Продолжить", "Delete draft": "Удалить черновик", "Draft deleted": "Черновик удалён", "Draft saved": "Черновик сохранён", "Save draft": "Сохранить черновик", "Choose state": "Выберите этап",
+    "Empty form — no draft saved": "Пустая форма — черновик не сохраняется", "Unsaved changes — recovery copy kept locally": "Есть изменения — копия для восстановления сохранена локально", "Saving draft…": "Сохранение черновика…", "Autosave failed — recovery copy kept locally": "Ошибка автосохранения — копия для восстановления сохранена локально", "Required to create a task": "Для создания задачи заполните",
+    "Local recovery storage is unavailable. Save the draft to the server before closing.": "Локальное хранилище восстановления недоступно. Сохраните черновик на сервере перед закрытием.",
+  },
   fr: { Backlog: "À faire", Features: "Fonctionnalités", "Drag task": "Déplacer la tâche", "Open task": "Ouvrir la tâche" },
 };
 const translations = Object.fromEntries(Object.entries(rows).map(([language, row]) => [language, Object.fromEntries(row.split("|").map((value, i) => [keys[i], value]))])) as Record<string, Record<Key, string>>;

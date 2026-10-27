@@ -7,6 +7,7 @@ type Props = Omit<SelectHTMLAttributes<HTMLSelectElement>, "onChange"> & {
   children: ReactNode;
   onChange?: (event: ChangeEvent<HTMLSelectElement>) => void;
   filter?: boolean;
+  placeholder?: string;
 };
 
 function textFrom(children: ReactNode): string {
@@ -43,6 +44,6 @@ export function SelectField({ children, value, onChange, multiple, className, di
       transitionOptions={{ timeout: 180 }} />;
   }
   return <Dropdown value={value} options={options} onChange={(event) => change(event.value)}
-    className={className} disabled={disabled} filter={filter} aria-label={props["aria-label"]}
+    className={className} disabled={disabled} filter={filter} placeholder={props.placeholder} aria-label={props["aria-label"]}
     transitionOptions={{ timeout: 180 }} />;
 }

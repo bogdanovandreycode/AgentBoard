@@ -7,6 +7,7 @@ import { SelectField } from "./SelectField";
 import { languages, setLanguage, t } from "./i18n";
 import { builtInColumns, lockedColumns, type ProjectSettings } from "./settings";
 import moment from "moment-timezone";
+import { GlobalSettingsPanel } from "./GlobalSettings";
 
 const themes = ["dark", "light", "black", "ubuntu", "windows"] as const;
 const timezones = ["local", ...moment.tz.names()];
@@ -36,7 +37,7 @@ export function SettingsPage({ value, onSave, saving, error, projectPath }: {
     setNewColumn("");
   };
   return <div className="settings-page">
-    <TabMenu className="settings-tabs" model={[{ label: t("General") }, { label: t("Columns") }, { label: "MCP" }]} activeIndex={activeTab} onTabChange={(event) => setActiveTab(event.index)} />
+    <TabMenu className="settings-tabs" model={[{ label: t("General") }, { label: t("Columns") }, { label: "MCP" }, { label: t("Global settings") }]} activeIndex={activeTab} onTabChange={(event) => setActiveTab(event.index)} />
     {activeTab === 0 && <section className="settings-panel settings-tab-content">
       <h2>{t("Appearance and language")}</h2>
       <div className="settings-grid">
@@ -78,7 +79,8 @@ export function SettingsPage({ value, onSave, saving, error, projectPath }: {
       <Message className="settings-notice" severity="info" text={t("Each worker uses its own MCP command. Open a worker to copy its client configuration and check the connection.")} />
       <code className="settings-command">agentboard mcp --project "{projectPath}" --worker WORKER_SLUG</code>
     </section>}
-    {error && <Message severity="error" text={error} />}
-    <Button className="primary" label={saving ? t("Saving…") : t("Save settings")} loading={saving} disabled={saving || form.columns.length < builtInColumns.length} onClick={() => onSave(form)} />
+    {activeTab === 3 && <GlobalSettingsPanel />}
+    {activeTab !== 3 && error && <Message severity="error" text={error} />}
+    {activeTab !== 3 && <Button className="primary" label={saving ? t("Saving…") : t("Save settings")} loading={saving} disabled={saving || form.columns.length < builtInColumns.length} onClick={() => onSave(form)} />}
   </div>;
 }

@@ -33,6 +33,14 @@ cross-project work with `--allow-project-mismatch`. Workspace changes invalidate
 previous confirmations. If a client supplies no roots, only the MCP process's
 launch directory is available for automatic detection.
 
+**Global settings → MCP project context** controls these checks for every project
+and worker using the same database. It is enabled by default. When disabled, MCP
+uses its configured project without launch-directory/client-root confirmation or
+mismatch errors. Existing sessions apply the setting on their next tool call;
+task visibility, workflow transitions and human-testing rules remain enforced.
+The explicit `--allow-project-mismatch` launch flag continues to bypass the check
+for that individual launch. A valid registered project and worker are still required.
+
 After checking, the diagnostic block contains the absolute path to the running `agentboard.exe`. It is especially useful when installing from a ZIP. When installing via Scoop, you can use the `agentboard` command if the client sees the same `PATH`.
 
 ## Step 3: Add a server to your client

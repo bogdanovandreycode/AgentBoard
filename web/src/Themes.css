@@ -1,5 +1,5 @@
 .settings-page { display: grid; gap: 18px; max-width: 1150px; padding-bottom: 35px; }
-.settings-tabs .p-tabmenu-nav { flex-wrap: nowrap; overflow: hidden; scrollbar-width: none; border-color: var(--line); background: transparent; }
+.settings-tabs .p-tabmenu-nav { flex-wrap: wrap; overflow: visible; border-color: var(--line); background: transparent; }
 .settings-tabs .p-tabmenu-nav::-webkit-scrollbar { display: none; }
 .settings-tabs .p-menuitem-link { padding: 13px 22px; border-color: transparent; background: transparent; color: var(--muted); white-space: nowrap; }
 .settings-tabs .p-highlight .p-menuitem-link { border-color: var(--accent); color: var(--text); }

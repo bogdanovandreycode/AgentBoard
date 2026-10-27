@@ -175,3 +175,44 @@ func TestWorkspaceRootsOverrideAndRootChange(t *testing.T) {
 		t.Fatalf("explicit mismatch override: %+v %v", r, err)
 	}
 }
+
+func TestGlobalProjectContextSwitchAffectsExistingSession(t *testing.T) {
+	f := newImageFixture(t)
+	other, err := f.svc.Store.EnsureProject(f.ctx, "other", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cs, _ := workspaceClient(t, f, "2025-03-26", &WorkspaceContext{LaunchDirectory: other.Path, LaunchProject: &other}, nil)
+	call := func(name string, args map[string]any) *mcp.CallToolResult {
+		t.Helper()
+		result, err := cs.CallTool(f.ctx, &mcp.CallToolParams{Name: name, Arguments: args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result
+	}
+	if result := call("get_my_board", map[string]any{}); !result.IsError {
+		t.Fatal("enabled policy did not block")
+	}
+	settings, err := f.svc.GetGlobalSettings(f.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.CheckProjectContext = false
+	if _, err := f.svc.UpdateGlobalSettings(f.ctx, settings); err != nil {
+		t.Fatal(err)
+	}
+	if result := call("get_my_board", map[string]any{}); result.IsError {
+		t.Fatalf("disabled policy blocked: %+v", result.Content)
+	}
+	if result := call("get_task", map[string]any{"task_id": "00000000"}); !result.IsError {
+		t.Fatal("visibility bypassed")
+	}
+	settings.CheckProjectContext = true
+	if _, err := f.svc.UpdateGlobalSettings(f.ctx, settings); err != nil {
+		t.Fatal(err)
+	}
+	if result := call("get_my_board", map[string]any{}); !result.IsError {
+		t.Fatal("re-enabled policy did not apply")
+	}
+}

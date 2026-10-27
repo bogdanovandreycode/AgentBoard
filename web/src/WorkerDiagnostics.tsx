@@ -12,6 +12,7 @@ import { Divider } from "primereact/divider";
 import { relativeTime } from "./workerPresentation";
 import { harnessPresets, mcpConfiguration } from "./workerPresets";
 import { t } from "./i18n";
+import { useGlobalSettings } from "./useGlobalSettings";
 
 type Session = {
   ID: string;
@@ -50,6 +51,7 @@ export function WorkerDiagnostics({
   formatDate: (value: string) => string;
 }) {
   const [copyStatus, setCopyStatus] = useState("");
+  const globalSettings = useGlobalSettings();
   const info = useQuery({
     queryKey: ["worker", worker.ID],
     queryFn: () => read<WorkerInfo>(`/workers/${worker.ID}`),
@@ -81,6 +83,7 @@ export function WorkerDiagnostics({
           : t("Never")}
       </p>
       <p>{t("Project:")} {projectPath}</p>
+      <Tag value={t(globalSettings.data?.checkProjectContext === false ? "Project context checks disabled globally" : "Project context checks enabled globally")} severity={globalSettings.data?.checkProjectContext === false ? "secondary" : "info"} />
       <Message severity="info" text={t("Enabled allows this worker to connect; it does not confirm a successful client connection. The HTTP server and MCP worker can use different projects. A workspace mismatch requires confirmation or returns an error.")} />
       <Message severity="info" text={t("Open sessions are active while the MCP process sends a heartbeat. After 90 seconds without a heartbeat, they become offline.")} />
       {(info.error || sessions.error) && (

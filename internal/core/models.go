@@ -13,10 +13,14 @@ var (
 	ErrHumanTestPending  = errors.New("HUMAN_TEST_PENDING")
 	ErrWorkerDisabled    = errors.New("WORKER_DISABLED")
 	ErrInvalidInput      = errors.New("INVALID_INPUT")
+	ErrDraftConflict     = errors.New("DRAFT_CONFLICT: this draft changed elsewhere; reopen its latest version")
+	ErrDraftIncomplete   = errors.New("DRAFT_INCOMPLETE: title, state, responsible and description are required to create a task")
 )
 
 type Project struct {
 	ID, Name, Path, CreatedAt, UpdatedAt string
+	TaskCount                            int
+	LastActivityAt                       string
 }
 
 type Worker struct {
