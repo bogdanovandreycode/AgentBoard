@@ -19,10 +19,17 @@ DOCUMENTS = ["README.md", *sorted(path.name for path in DOC.glob("*.md") if path
 LINK = re.compile(r"\]\(([^)]+)\)")
 
 
+def english_path(name: str) -> Path:
+    return ROOT / name if name == "README.md" else DOC / name
+
+
 def source_path(language: str, name: str) -> Path:
     if language == "en":
-        return ROOT / name if name == "README.md" else DOC / name
-    return DOC / language / name
+        return english_path(name)
+    localized = DOC / language / name
+    # A document added before its translations is published in English rather
+    # than failing the whole site build.
+    return localized if localized.is_file() else english_path(name)
 
 
 def output_path(language: str, name: str) -> Path:
@@ -39,7 +46,8 @@ def relative_url(current: Path, destination: Path) -> str:
 
 
 def markdown_html(text: str, source: Path, output: Path) -> str:
-    targets = {source_path(language, name).resolve(): output_path(language, name) for language in LANGUAGES for name in DOCUMENTS}
+    # English fallbacks must not redirect links in English pages to a locale.
+    targets = {source_path(language, name).resolve(): output_path(language, name) for language in LANGUAGES for name in DOCUMENTS if language == "en" or (DOC / language / name).is_file()}
     targets[(DOC / "LANGUAGES.md").resolve()] = SITE / "doc" / "LANGUAGES.html"
     targets[(ROOT / "LICENSE").resolve()] = SITE / "LICENSE"
     targets[(ROOT / "assets/social-preview.png").resolve()] = SITE / "assets/social-preview.png"
@@ -107,6 +115,8 @@ def main() -> None:
         for name in DOCUMENTS:
             if not source_path(language, name).is_file():
                 raise FileNotFoundError(source_path(language, name))
+            if language != "en" and not (DOC / language / name).is_file():
+                print(f"warning: {language}/{name} is not translated; using English")
             build_page(language, name)
     build_page("en", "LANGUAGES.md")
     print(f"Built {len(LANGUAGES) * len(DOCUMENTS) + 1} pages in {SITE}")

@@ -13,33 +13,63 @@ Open the created worker. The **MCP diagnostics** block shows the configuration f
 The main command looks like this:
 
 ```text
-agentboard mcp --project C:\Projects\MyFirstProject --worker codex
+agentboard mcp --worker codex
 ```
 
-`--project` should point to the folder you registered via `agentboard init`. `--worker` — `Slug` of the created worker. The MCP client runs this command itself when it needs tools. In the AgentBoard browser, the web server can run separately.
+`--worker` is the `Slug` of the created worker. The MCP client runs this command
+itself whenever it needs tools.
 
-You can start MCP from any folder with an explicit `--project`. Without it,
-`agentboard mcp --worker codex` discovers the nearest registered project containing
-the current directory, including subdirectories. Outside registered projects it
-returns `PROJECT_REQUIRED` with instructions to specify `--project`.
+### MCP works without the web UI
 
-The HTTP server's launch folder does not bind MCP workers. MCP reports its project
-and launch context in `agentboard://current-worker` and checks client workspace
-roots when the client provides them. If the launch project or workspace conflicts
-with the configured project, tools ask for confirmation through MCP elicitation.
-Clients without form elicitation receive `PROJECT_CONTEXT_MISMATCH` before any task
-access. Correct the project/worker configuration, or explicitly confirm intentional
-cross-project work with `--allow-project-mismatch`. Workspace changes invalidate
-previous confirmations. If a client supplies no roots, only the MCP process's
-launch directory is available for automatic detection.
+`agentboard mcp` is a separate stdio process that opens the AgentBoard database
+directly. It does not need `agentboard open`/`serve`, does not depend on the folder
+where the web UI was started, and is not affected by how many web UI instances are
+running. Several agents can work at the same time, each in its own project: every
+client starts its own MCP process, and all of them safely share one SQLite database.
+
+### How the project is selected
+
+The MCP server starts in any folder. On the first tool call it binds to a project:
+
+1. `--project PATH`, when given (any folder inside a registered project works);
+2. otherwise the client's workspace roots, when the client reports them;
+3. otherwise the folder where the client launched the MCP server.
+
+`get_my_board` returns the bound project and worker in `session`, together with
+`binding_source`. If the workspace roots change, the next tool call rebinds.
+Without `--worker`, the project's only enabled worker is used.
+
+If the server cannot bind, every tool returns an error the agent must relay to the
+user, and nothing is accessed:
+
+| Code | Meaning |
+| --- | --- |
+| `NO_PROJECTS` | The database has no projects. Run `agentboard init` in the project folder and create a worker. No restart is needed. |
+| `PROJECT_REQUIRED` | The workspace is outside registered projects. The message lists them. |
+| `PROJECT_NOT_FOUND` | `--project` is not inside a registered project. |
+| `PROJECT_AMBIGUOUS` | Workspace roots belong to several projects. Add `--project`. |
+| `NO_WORKERS`, `WORKER_REQUIRED`, `WORKER_NOT_FOUND`, `WORKER_DISABLED` | Create, enable or choose the worker with `--worker`. |
+
+The configurations generated for **Codex** and **Gemini CLI** are user-level and
+shared by every folder, so they omit `--project`: create a worker with the same slug
+in each project where that client works. Project-level files (Claude Code, Cursor,
+OpenCode, VS Code) include `--project` for their own project.
+
+### Explicit project and context checks
+
+When `--project` is set and the launch folder or the client workspace belongs to a
+different project, tools ask for confirmation through MCP elicitation. Clients
+without form elicitation receive `PROJECT_CONTEXT_MISMATCH` before any task access.
+Correct the configuration, remove `--project` so the project is detected
+automatically, or explicitly confirm intentional cross-project work with
+`--allow-project-mismatch`. Workspace changes invalidate previous confirmations.
+Automatically detected projects need no confirmation.
 
 **Global settings → MCP project context** controls these checks for every project
 and worker using the same database. It is enabled by default. When disabled, MCP
-uses its configured project without launch-directory/client-root confirmation or
-mismatch errors. Existing sessions apply the setting on their next tool call;
-task visibility, workflow transitions and human-testing rules remain enforced.
-The explicit `--allow-project-mismatch` launch flag continues to bypass the check
-for that individual launch. A valid registered project and worker are still required.
+uses its configured project without confirmation or mismatch errors. Existing
+sessions apply the setting on their next tool call; task visibility, workflow
+transitions and human-testing rules remain enforced.
 
 After checking, the diagnostic block contains the absolute path to the running `agentboard.exe`. It is especially useful when installing from a ZIP. When installing via Scoop, you can use the `agentboard` command if the client sees the same `PATH`.
 
@@ -56,13 +86,13 @@ The worker interface already has a ready-made fragment. Below is an explanation 
 | OpenCode | `opencode.json` project, object `mcp` | list of MCP tools in OpenCode |
 | VS Code Copilot | `.vscode\mcp.json` project, object `servers` | command **MCP: List Servers** |
 
-For Codex and Claude Code, an example with the project `C:\Projects\MyFirstProject` and the worker `codex`:
+Examples for Codex (user-level, project detected automatically) and Claude Code (project file) with the project `C:\Projects\MyFirstProject` and the worker `codex`:
 
 ```toml
 # %USERPROFILE%\.codex\config.toml
 [mcp_servers.agentboard_codex]
 command = "agentboard"
-args = ["mcp", "--project", "C:\\Projects\\MyFirstProject", "--worker", "codex"]
+args = ["mcp", "--worker", "codex"]
 ```
 
 ```json
@@ -83,7 +113,7 @@ In JSON, the Windows backslash is doubled; a ready-made fragment from the interf
 
 ## Step 4: Check your connection
 
-1. Open the worker card and click **Check again**. **Server check** launches the actual stdio executable with this project, worker and database, then verifies the handshake and tool discovery. It does not verify the external AI client's configuration. **Enabled** is permission to connect, not evidence of a successful connection.
+1. Open the worker card and click **Check again**. **Server check** launches the actual stdio executable with this project, worker and database, verifies the handshake and tool discovery, and checks that the project and worker resolve. It does not verify the external AI client's configuration. **Enabled** is permission to connect, not evidence of a successful connection.
 2. Start or restart the AI ​​client after adding the configuration file. Have it call `get_my_board`.
 3. **Client connected** will appear in AgentBoard and a new session will appear in the list. Only this confirms the connection of your client. If there are tools, but the client is not connected, check the path to the program, the name of the configuration file and its JSON/TOML syntax.
 
@@ -95,6 +125,12 @@ characters, scoped to the worker's visible assigned tasks. Ambiguous prefixes re
 IDs in `create_feature` require full UUIDs. Boards and transitions return compact task
 summaries; `get_task` returns the full context and native screenshot blocks. JSON is
 sent once as text, without a duplicate `structuredContent` payload.
+
+Every tool declares `title` and all four MCP behaviour hints (`readOnlyHint`,
+`destructiveHint`, `idempotentHint`, `openWorldHint`) as explicit booleans. Read
+tools are read-only and idempotent; write tools only add records or move tasks
+forward, so none is destructive, and none reaches outside the local AgentBoard
+database.
 
 For human or hybrid testing, finish implementation, move the card to `testing`, add
 handoff instructions, and end the session or work on another task. Never wait or poll

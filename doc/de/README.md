@@ -52,7 +52,7 @@ Eine Person kann Aufgaben auf der Tafel verschieben. KI kann nur `Features → I
 agentboard init [--db PATH] [project-path]
 agentboard open [--addr 127.0.0.1:7337] [--db PATH] [project-path]
 agentboard serve [--addr 127.0.0.1:7337] [--db PATH]
-agentboard mcp --project PROJECT_PATH --worker WORKER_SLUG [--db PATH]
+agentboard mcp [--worker WORKER_SLUG] [--project PROJECT_PATH] [--db PATH] [--allow-project-mismatch]
 agentboard version
 ```
 
