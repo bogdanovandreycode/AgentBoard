@@ -90,27 +90,40 @@ func serveCommand(args []string, open bool) error {
 	if f.NArg() > 1 || (!open && f.NArg() != 0) {
 		return errors.New("usage: agentboard open [--addr address] [--db path] [project-path]")
 	}
-	url := "http://" + *addr
+	explicitAddr := false
+	f.Visit(func(fl *flag.Flag) { explicitAddr = explicitAddr || fl.Name == "addr" })
+	path := "."
+	if f.NArg() == 1 {
+		path = f.Arg(0)
+	}
 	if open {
-		path := "."
-		if f.NArg() == 1 {
-			path = f.Arg(0)
-		}
-		var err error
-		url, err = launcherURL(url, path)
-		if err != nil {
-			return err
-		}
 		// Reuse an existing AgentBoard server without starting another process.
 		if agentBoardRunning("http://" + *addr) {
+			url, err := launcherURL("http://"+*addr, path)
+			if err != nil {
+				return err
+			}
 			return openURL(url)
 		}
 	}
 	listener, err := net.Listen("tcp", *addr)
+	if err != nil && !explicitAddr {
+		// The default port is taken by another program. The web UI is independent
+		// of MCP workers, so any free local port works.
+		log.Printf("listen %s: %v; using a free local port", *addr, err)
+		listener, err = net.Listen("tcp", "127.0.0.1:0")
+	}
 	if err != nil {
 		return err
 	}
 	defer listener.Close()
+	*addr = listener.Addr().String()
+	url := "http://" + *addr
+	if open {
+		if url, err = launcherURL(url, path); err != nil {
+			return err
+		}
+	}
 	st, err := persistence.Open(*db)
 	if err != nil {
 		return err
@@ -152,15 +165,15 @@ func serveCommand(args []string, open bool) error {
 
 func mcpCommand(args []string) error {
 	f := flag.NewFlagSet("mcp", flag.ContinueOnError)
-	project := f.String("project", "", "managed project directory (defaults to the nearest registered project containing the current directory)")
-	worker := f.String("worker", "", "worker id or slug")
+	project := f.String("project", "", "managed project directory (default: detected from client workspace roots, then the launch directory)")
+	worker := f.String("worker", "", "worker id or slug (default: the project's only enabled worker)")
 	db := f.String("db", "", "database path")
 	allowMismatch := f.Bool("allow-project-mismatch", false, "explicitly confirm using --project when the launch directory or client workspace belongs to another project")
 	if err := f.Parse(args); err != nil {
 		return err
 	}
-	if *worker == "" || f.NArg() != 0 {
-		return errors.New("usage: agentboard mcp --worker WORKER [--project PATH] [--db PATH] [--allow-project-mismatch]")
+	if f.NArg() != 0 {
+		return errors.New("usage: agentboard mcp [--worker WORKER] [--project PATH] [--db PATH] [--allow-project-mismatch]")
 	}
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -174,16 +187,14 @@ func mcpCommand(args []string) error {
 	svc := service.New(st)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	p, workspace, err := resolveMCPProject(ctx, svc, cwd, *project, *allowMismatch)
+	workspace, err := mcpWorkspace(ctx, svc, cwd, *allowMismatch)
 	if err != nil {
 		return err
 	}
-	agent, err := svc.BeginAgentSession(ctx, p.Path, *worker, "stdio MCP")
-	if err != nil {
-		return err
-	}
-	defer svc.EndAgentSession(context.Background(), agent)
-	server := mcpserver.New(svc, agent, version)
+	// The worker never depends on the web UI process: the project and worker are
+	// resolved on the first tool call, and configuration problems are returned
+	// to the agent as tool errors it can relay to the user.
+	server := mcpserver.NewWithBinding(svc, mcpserver.Binding{ProjectPath: *project, WorkerRef: *worker, Client: "stdio MCP"}, version)
 	server.Workspace = workspace
 	return server.Run(ctx, &mcp.StdioTransport{})
 }

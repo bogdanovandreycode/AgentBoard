@@ -406,6 +406,12 @@ func (a *API) checkWorkerMCP(w http.ResponseWriter, r *http.Request) {
 	}
 	result["toolCount"] = len(tools.Tools)
 	result["serverOK"] = len(tools.Tools) > 0
+	// The MCP process binds lazily, so verify the configured project and worker
+	// with the same Core resolver instead of opening a worker session.
+	if _, err := a.Service.ResolveAgentBinding(r.Context(), service.AgentBindingRequest{ProjectPath: project.Path, WorkerRef: worker.Slug}); err != nil {
+		result["serverOK"] = false
+		result["error"] = err.Error()
+	}
 	write(w, http.StatusOK, result)
 }
 func (a *API) updateWorker(w http.ResponseWriter, r *http.Request) {

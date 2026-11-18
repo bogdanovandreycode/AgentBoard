@@ -18,7 +18,11 @@ export function presetCapabilities(harness: string) {
 }
 
 export function mcpConfiguration(harness: string, projectPath: string, slug: string, executable = "agentboard", databasePath?: string) {
-  const args = ["mcp", "--project", projectPath, "--worker", slug];
+  // Codex and Gemini read one user-level configuration for every folder, so the
+  // MCP server detects the project from the agent's workspace instead of pinning
+  // one project. Project-local configuration files bind their own project.
+  const globalConfig = harness === "codex" || harness === "gemini";
+  const args = globalConfig ? ["mcp", "--worker", slug] : ["mcp", "--project", projectPath, "--worker", slug];
   if (databasePath) args.push("--db", databasePath);
   const server = { command: executable, args };
   if (harness === "codex") return {

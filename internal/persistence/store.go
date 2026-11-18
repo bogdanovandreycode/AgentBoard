@@ -74,12 +74,16 @@ func Open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", path)
+	// Several processes share this database: any number of web servers and one
+	// stdio MCP process per agent. Every connection waits for locks, uses WAL so
+	// readers never block the writer, and starts write-capable transactions
+	// immediately so lock upgrades cannot fail with SQLITE_BUSY mid-transaction.
+	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(15000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_txlock=immediate")
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if _, err = db.Exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;"); err != nil {
+	if err = db.Ping(); err != nil {
 		db.Close()
 		return nil, err
 	}

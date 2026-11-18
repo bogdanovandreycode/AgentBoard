@@ -29,10 +29,18 @@ func TestCompactBoardTransitionsSchemasAndUsageScope(t *testing.T) {
 	if _, err := f.svc.HumanUpdateTask(f.ctx, f.task.ID, core.TaskUpdate{Description: &secretDescription}); err != nil {
 		t.Fatal(err)
 	}
-	var board map[string][]map[string]any
-	decodeJSON(t, f.call(t, "get_my_board", map[string]any{}, false), &board)
+	var response struct {
+		Session  map[string]string
+		Board    map[string][]map[string]any
+		NextStep string `json:"next_step"`
+	}
+	decodeJSON(t, f.call(t, "get_my_board", map[string]any{}, false), &response)
+	board := response.Board
 	if len(board["features"]) != 1 || board["features"][0]["Description"] != nil {
 		t.Fatalf("non-compact board: %+v", board)
+	}
+	if response.Session["project_id"] != f.agent.Project.ID || response.Session["worker_slug"] != "codex" || !strings.Contains(response.NextStep, "move_to_in_progress") {
+		t.Fatalf("board session context: %+v", response)
 	}
 	var moved map[string]any
 	decodeJSON(t, f.call(t, "move_to_in_progress", map[string]any{"task_id": strings.ToUpper(f.task.ID[:8])}, false), &moved)

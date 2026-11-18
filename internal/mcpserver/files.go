@@ -20,8 +20,8 @@ type uploadFileInput struct {
 }
 
 type getFileInput struct {
-	TaskID string `json:"task_id"`
-	FileID string `json:"file_id"`
+	TaskID string `json:"task_id" jsonschema:"Full UUID or a unique case-insensitive prefix of at least 8 characters from get_my_board"`
+	FileID string `json:"file_id" jsonschema:"File ID from get_task Files or History[].Files"`
 	Offset int    `json:"offset,omitempty" jsonschema:"Byte offset, default 0"`
 	Length int    `json:"length,omitempty" jsonschema:"Bytes to return, default 65536, maximum 1048576"`
 }
@@ -36,16 +36,16 @@ type fileChunk struct {
 }
 
 func (s *Server) registerFiles() {
-	addTool(s, &mcp.Tool{Name: "upload_file", Description: "Upload any file for an assigned task from a local path or base64, up to 50 MiB. Preserves the original bytes. Insert the returned document Markdown link in add_history to attach it. For screenshots use upload_image."}, func(ctx context.Context, _ *mcp.CallToolRequest, in uploadFileInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "upload_file", Title: "Upload file attachment", Annotations: annotations(false, false), Description: "Upload any file for an assigned task from a local path or base64, up to 50 MiB. Preserves the original bytes. Insert the returned document Markdown link in add_history to attach it. For screenshots use upload_image."}, func(ctx context.Context, _ *mcp.CallToolRequest, in uploadFileInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
-		if _, err := s.Service.AgentTask(ctx, s.Agent, in.TaskID); err != nil {
+		if _, err := s.Service.AgentTask(ctx, agentFrom(ctx), in.TaskID); err != nil {
 			return failure(err)
 		}
 		data, name, err := uploadData(in.Path, in.Base64, in.Name, service.MaxFileBytes)
 		if err != nil {
 			return failure(err)
 		}
-		file, err := s.Service.AgentUploadFile(ctx, s.Agent, in.TaskID, name, data)
+		file, err := s.Service.AgentUploadFile(ctx, agentFrom(ctx), in.TaskID, name, data)
 		if err != nil {
 			return failure(err)
 		}
@@ -55,12 +55,12 @@ func (s *Server) registerFiles() {
 			Markdown string              `json:"markdown"`
 		}{File: file, Markdown: fmt.Sprintf("[📄 %s](%s)", name, file.URL)})
 	})
-	addTool(s, &mcp.Tool{Name: "get_file", Description: "Read a file attached to an assigned task's description, instructions or comment. Returns a bounded chunk encoded as utf-8 or base64 with next_offset and eof. Read following chunks using next_offset. Access follows task permissions."}, func(ctx context.Context, _ *mcp.CallToolRequest, in getFileInput) (*mcp.CallToolResult, any, error) {
+	addTool(s, &mcp.Tool{Name: "get_file", Title: "Read task file attachment", Annotations: annotations(true, true), Description: "Read a file attached to an assigned task's description, instructions or comment. Returns a bounded chunk encoded as utf-8 or base64 with next_offset and eof. Read following chunks using next_offset. Access follows task permissions."}, func(ctx context.Context, _ *mcp.CallToolRequest, in getFileInput) (*mcp.CallToolResult, any, error) {
 		s.count(ctx)
 		if in.Offset < 0 || in.Length < 0 || in.Length > 1<<20 {
 			return failure(core.ErrInvalidInput)
 		}
-		file, data, err := s.Service.AgentFile(ctx, s.Agent, in.TaskID, in.FileID)
+		file, data, err := s.Service.AgentFile(ctx, agentFrom(ctx), in.TaskID, in.FileID)
 		if err != nil {
 			return failure(err)
 		}
